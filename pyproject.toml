@@ -1,0 +1,10 @@
+[build-system]
+requires = ["setuptools>=61.0","wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cogemi"
+version = "0.0.0"
+description = "COGEMI package for tests"
+authors = [ { name = "Dev" } ]
+dependencies = []

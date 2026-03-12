@@ -205,3 +205,30 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+.Rproj.user
+
+# R project files
+*.Rproj
+.RData
+.Rhistory
+*.R
+
+# Data files (download separately - not stored in repo)
+data/
+*.csv
+*.xlsx
+*.json
+*.zip
+
+# Scratch / output files
+out.py
+out.txt
+
+# macOS
+.DS_Store
+
+# VS Code
+.vscode/
+
+# egg-info
+cogemi.egg-info/
