@@ -66,7 +66,7 @@ def _assert_valid_context_structure(contexts_dict: Dict) -> None:
             assert len(entry["States"]) >= 1
 
 
-def _responses(scenario_id: str, ratings: List[str], judgment_map: Dict[str, float]) -> List[SurveyResponse]:
+def _responses(scenario_id: str, ratings: List[str]) -> List[SurveyResponse]:
     return [
         SurveyResponse(participant_id=f"p{i}", scenario_id=scenario_id, response=r)
         for i, r in enumerate(ratings)
@@ -146,7 +146,7 @@ def test_pipeline_integration(spec):
     survey_responses = []
     for scenario in scenarios:
         survey_responses.extend(
-            _responses(scenario.id, ratings_by_scenario[scenario.id], judgment_map)
+            _responses(scenario.id, ratings_by_scenario[scenario.id])
         )
 
     # --- fit ---
