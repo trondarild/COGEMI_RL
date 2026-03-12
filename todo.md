@@ -10,9 +10,8 @@
 - [x] implement llm calls for all placeholders in extractor_llm
 - [x] implement getting the llm provider (ollama or external) and model from an external config file
 ## Testing
-- [ ] write integration tests for: social appropriateness; 
-- [ ] write integration tests for: justice-injustice
-- [ ] run, iterate on integration tests
+- [x] write integration tests for: social appropriateness; justice-injustice
+- [x] run, iterate on integration tests
 ## Data
 - [ ] read papers.md and skim SCRUPL, NORMBANk papers to get an overview of datasets
 - [ ] adapt external datasets as sources of contexts/situations/dilemmas/scenarios: SCRUPL, NORMBANK
