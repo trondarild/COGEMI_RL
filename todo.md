@@ -8,7 +8,7 @@
 - [x] update readme.md with an overview of input output types for the whole pipeline
 ## Core implementation
 - [x] implement llm calls for all placeholders in extractor_llm
-- [ ] implement getting the llm provider (ollama or external) and model from an external config file
+- [x] implement getting the llm provider (ollama or external) and model from an external config file
 ## Testing
 - [ ] write integration tests for: social appropriateness; 
 - [ ] write integration tests for: justice-injustice
@@ -21,7 +21,8 @@
 - [x] commit current version
 - [ ] clean up, delete unneccessary files (out.py, out.txt, scratch files in root)
 - [ ] update and tidy file structure
-
+## Documentation
+- [ ] update readme.md with installation procedure
 ## Online experiments
 - [ ] prepare online experiments to gather data for social appropriateness
     - [ ] prepare budget for Prolific experiment

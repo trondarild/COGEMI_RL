@@ -5,6 +5,7 @@ from typing import Dict, List, Optional
 import ollama
 
 from cogemi.observe.scenario import Scenario
+from cogemi.config import CogemiConfig, LLMConfig, load_config
 
 DEFAULT_MODEL = "qwen3:1.7b"
 
@@ -58,14 +59,31 @@ Scenario: {scenario}"""
 class LLMFeatureExtractor:
     """Extract features from scenarios using a large language model.
 
-    Pass model="stub" to skip LLM calls and return hardcoded responses —
-    useful for unit tests and pipeline smoke tests.
+    Configuration priority (highest to lowest):
+      1. model= / config= constructor arguments
+      2. cogemi_config.yaml in the working directory
+      3. ~/.cogemi_config.yaml
+      4. Built-in defaults (ollama / qwen3:1.7b)
 
-    Pass any Ollama model name (e.g. "qwen3:1.7b") for real extraction.
+    Pass model="stub" to skip all LLM calls and return hardcoded values —
+    useful for unit tests and pipeline smoke tests.
     """
 
-    def __init__(self, model: str = DEFAULT_MODEL):
-        self.model = model
+    def __init__(
+        self,
+        model: Optional[str] = None,
+        config_path: Optional[str] = None,
+    ):
+        # Load config from file; constructor model arg overrides it
+        cfg: CogemiConfig = load_config(config_path)
+        self.llm_config: LLMConfig = cfg.llm
+
+        if model is not None:
+            self.llm_config.model = model
+
+    @property
+    def model(self) -> str:
+        return self.llm_config.model
 
     # ------------------------------------------------------------------
     # Public API
@@ -88,7 +106,6 @@ class LLMFeatureExtractor:
         """Return feature labels summarising a context entry."""
         if self.model == "stub":
             return ["To do something in a positive way", "To do something in a negative way"]
-        # Build a short description from states stored in the context
         states = context.get("States", [])
         state_texts = ", ".join(str(s[0]) for s in states[:5])
         description = f"A context with states: {state_texts}"
@@ -107,17 +124,49 @@ class LLMFeatureExtractor:
         return raw.strip()
 
     # ------------------------------------------------------------------
-    # Internal helpers
+    # Internal: dispatch to provider
     # ------------------------------------------------------------------
 
     def _call(self, prompt: str) -> str:
-        """Send a prompt to Ollama and return the response text."""
+        """Send a prompt to the configured provider and return the response text."""
+        provider = self.llm_config.provider
+
+        if provider == "ollama":
+            return self._call_ollama(prompt)
+        elif provider == "openai":
+            return self._call_openai(prompt)
+        else:
+            raise ValueError(
+                f"Unknown LLM provider {provider!r}. "
+                "Supported: 'ollama', 'openai'."
+            )
+
+    def _call_ollama(self, prompt: str) -> str:
         response = ollama.chat(
-            model=self.model,
+            model=self.llm_config.model,
             messages=[{"role": "user", "content": prompt}],
             options={"temperature": 0.0},
         )
         return response.message.content.strip()
+
+    def _call_openai(self, prompt: str) -> str:
+        try:
+            from openai import OpenAI
+        except ImportError:
+            raise ImportError(
+                "The 'openai' package is required for provider='openai'. "
+                "Install it with: pip install openai"
+            )
+        client = OpenAI(
+            api_key=self.llm_config.api_key,
+            base_url=self.llm_config.base_url or None,
+        )
+        response = client.chat.completions.create(
+            model=self.llm_config.model,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.0,
+        )
+        return response.choices[0].message.content.strip()
 
     @staticmethod
     def distribution(state_label: str) -> Dict[int, float]:
@@ -133,13 +182,12 @@ class LLMFeatureExtractor:
 # Module-level helper used by TextAbstraction
 # ---------------------------------------------------------------------------
 
-def extract_action(text: str, model: str = DEFAULT_MODEL) -> str:
+def extract_action(text: str, model: Optional[str] = None, config_path: Optional[str] = None) -> str:
     """Extract a generalised action label from scenario text.
 
-    Uses the LLMFeatureExtractor with the given model.
-    Pass model="stub" for tests.
+    Uses the configured LLMFeatureExtractor. Pass model="stub" for tests.
     """
-    return LLMFeatureExtractor(model=model).extract_action(text)
+    return LLMFeatureExtractor(model=model, config_path=config_path).extract_action(text)
 
 
 # ---------------------------------------------------------------------------
@@ -149,10 +197,9 @@ def extract_action(text: str, model: str = DEFAULT_MODEL) -> str:
 def _parse_csv_list(raw: str) -> List[str]:
     """Parse a comma-separated LLM response into a clean list of strings.
 
-    Strips whitespace, quotes, and empty entries. Falls back to the whole
-    string as a single item if no commas are found.
+    Strips whitespace, quotes, and <think>...</think> blocks.
+    Falls back to the whole string as a single item if no commas are found.
     """
-    # Strip common thinking-model tags (e.g. <think>...</think>)
     raw = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
     items = [item.strip().strip('"').strip("'") for item in raw.split(",")]
     items = [item for item in items if item]
