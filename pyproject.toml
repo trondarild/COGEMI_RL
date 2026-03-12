@@ -7,4 +7,13 @@ name = "cogemi"
 version = "0.0.0"
 description = "COGEMI package for tests"
 authors = [ { name = "Dev" } ]
-dependencies = []
+dependencies = [
+    "ollama>=0.6",
+    "pandas",
+    "numpy",
+    "scikit-learn",
+    "scipy",
+    "natsort",
+    "tqdm",
+    "tabulate",
+]

@@ -10,7 +10,7 @@ def test_text_abstraction_identity():
         metadata={}
     )
 
-    abstraction = TextAbstraction()
+    abstraction = TextAbstraction(model="stub")
     scenario = abstraction.abstract(obs)
 
     assert scenario.id == "obs1"

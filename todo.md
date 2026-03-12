@@ -7,7 +7,7 @@
 - [x] make a mermaid diagram of the pipeline, annotated with io types
 - [x] update readme.md with an overview of input output types for the whole pipeline
 ## Core implementation
-- [ ] implement llm calls for all placeholders in extractor_llm
+- [x] implement llm calls for all placeholders in extractor_llm
 - [ ] implement getting the llm provider (ollama or external) and model from an external config file
 ## Testing
 - [ ] write integration tests for: social appropriateness; 
