@@ -19,7 +19,7 @@
 - [x] implement support for roles according to the plan
 - [x] implement unit tests for role scenarios
 - [x] iterate unit tests for role support until 100% pass on both previous non-role tests and new role tests
-- [ ] create a test data set with 10 actions and 10 contexts for scenarios with roles
+- [x] create a test data set with 10 actions and 10 contexts for scenarios with roles
 - [ ] create a test survery with agent-target permutations using the test data set
 - [ ] use the data from test survery to test full pipeline integration test with roles and iterate integration test until 100% pass
 - [ ] update readme.md documentation with info about role support
