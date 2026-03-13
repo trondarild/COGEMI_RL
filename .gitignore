@@ -214,7 +214,7 @@ __marimo__/
 *.R
 
 # Data files (download separately - not stored in repo)
-data/
+/data/
 *.csv
 *.xlsx
 *.json

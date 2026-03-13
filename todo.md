@@ -15,7 +15,7 @@
 ## Data
 - [x] read papers.md and skim SCRUPL, NORMBANk papers to get an overview of datasets
 - [x] create plan for adapting external datasets to COGEMI (see data/ADAPTATION_PLAN.md)
-- [ ] implement NormBank loader (cogemi/data/normbank.py) + integration test
+- [x] implement NormBank loader (cogemi/data/normbank.py) + integration test
 - [ ] implement SCRUPLES Anecdotes loader (cogemi/data/scruples.py) + integration test
 - [ ] semantic action clustering (LLM normalisation of raw SCRUPLES action strings)
 - [ ] SCRUPLES Dilemmas — defer (pairwise format needs Bradley-Terry or similar)
