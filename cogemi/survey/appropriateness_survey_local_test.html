@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<!--
+  LOCAL TEST VERSION of the COGEMI Social Appropriateness survey.
+  Open this file directly in a browser — no server or Google account needed.
+
+  Differences from the production version (appropriateness_survey.html):
+  - google.script.run is mocked entirely in JavaScript
+  - Responses are saved to localStorage (key: "cogemi_test_responses")
+  - A "Download responses (CSV)" button appears on the completion page
+  - A floating debug panel shows collected responses in real time
+
+  To inspect collected data:
+    localStorage.getItem("cogemi_test_responses")
+  or click "Download responses (CSV)" at the end.
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>[LOCAL TEST] Social Appropriateness Study</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f0f4f8;
+      color: #222;
+      min-height: 100vh;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 2rem 1rem;
+    }
+    .card {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+      padding: 2rem;
+      max-width: 640px;
+      width: 100%;
+    }
+    h1 { font-size: 1.4rem; margin-bottom: 1rem; }
+    h2 { font-size: 1.1rem; margin-bottom: 0.75rem; color: #444; }
+    p  { line-height: 1.6; margin-bottom: 0.75rem; color: #333; }
+    .test-banner {
+      background: #fff3cd;
+      border: 1px solid #ffc107;
+      border-radius: 6px;
+      padding: 0.6rem 1rem;
+      font-size: 0.85rem;
+      margin-bottom: 1rem;
+      color: #856404;
+    }
+    .progress-bar { height: 6px; background: #e0e0e0; border-radius: 3px; margin-bottom: 1.5rem; overflow: hidden; }
+    .progress-fill { height: 100%; background: #4a90d9; border-radius: 3px; transition: width 0.3s ease; }
+    .scenario-text {
+      font-size: 1.05rem;
+      line-height: 1.65;
+      background: #f9f9f9;
+      border-left: 4px solid #4a90d9;
+      padding: 1rem 1.25rem;
+      border-radius: 0 6px 6px 0;
+      margin-bottom: 1.5rem;
+    }
+    .question { font-weight: 600; margin-bottom: 1rem; }
+    .response-buttons { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+    .response-btn {
+      flex: 1; min-width: 120px;
+      padding: 0.75rem 1rem;
+      border: 2px solid #ccc; border-radius: 8px;
+      background: #fff; font-size: 0.95rem; cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .response-btn:hover { border-color: #4a90d9; background: #eaf2fb; }
+    .response-btn.selected { border-color: #4a90d9; background: #4a90d9; color: #fff; }
+    .btn-primary {
+      display: block; width: 100%;
+      padding: 0.85rem; background: #4a90d9; color: #fff;
+      border: none; border-radius: 8px;
+      font-size: 1rem; font-weight: 600; cursor: pointer;
+      margin-top: 1.5rem; transition: background 0.15s;
+    }
+    .btn-primary:hover   { background: #3578c0; }
+    .btn-primary:disabled { background: #aaa; cursor: not-allowed; }
+    .btn-secondary {
+      display: block; width: 100%;
+      padding: 0.75rem; background: #fff; color: #4a90d9;
+      border: 2px solid #4a90d9; border-radius: 8px;
+      font-size: 0.95rem; font-weight: 600; cursor: pointer;
+      margin-top: 0.75rem; transition: background 0.15s;
+    }
+    .btn-secondary:hover { background: #eaf2fb; }
+    label { display: block; margin-bottom: 0.4rem; font-weight: 500; }
+    input, select {
+      width: 100%; padding: 0.55rem 0.75rem;
+      border: 1px solid #ccc; border-radius: 6px;
+      font-size: 0.95rem; margin-bottom: 1rem;
+    }
+    .field-row { display: flex; gap: 1rem; }
+    .field-row > div { flex: 1; }
+    .hidden { display: none; }
+    .small  { font-size: 0.85rem; color: #666; }
+    .error  { color: #c0392b; font-size: 0.9rem; margin-top: 0.5rem; }
+
+    /* Debug panel */
+    #debug-panel {
+      position: fixed; bottom: 1rem; right: 1rem;
+      width: 320px; max-height: 260px;
+      background: #1e1e1e; color: #9cdcfe;
+      border-radius: 8px; padding: 0.75rem;
+      font-family: monospace; font-size: 0.78rem;
+      overflow-y: auto; z-index: 9999;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+    }
+    #debug-panel h3 { color: #569cd6; margin-bottom: 0.5rem; font-size: 0.82rem; }
+    #debug-log div  { border-bottom: 1px solid #333; padding: 0.2rem 0; }
+    .attn-pass  { color: #4ec9b0; }
+    .attn-fail  { color: #f44747; }
+  </style>
+</head>
+<body>
+<div class="card">
+
+  <!-- ===== CONSENT PAGE ===== -->
+  <div id="page-consent">
+    <div class="test-banner">⚠ LOCAL TEST MODE — responses saved to localStorage, not Google Sheets</div>
+    <h1>Social Appropriateness Study</h1>
+    <p>Thank you for taking part. This study investigates how people judge the social appropriateness of everyday actions.</p>
+    <p>You will read <strong>~27 short vignettes</strong> describing everyday situations and rate how socially appropriate the action is on a 3-point scale. The study takes approximately <strong>8 minutes</strong>.</p>
+    <p><strong>Your data:</strong> Responses are stored securely and linked only to your Prolific ID, which will be removed from the analysis dataset after payment. Participation is voluntary; you may withdraw at any time.</p>
+    <p class="small">This research is conducted by [Institution]. If you have questions, contact [email].</p>
+    <div style="margin-top:1.25rem">
+      <label><input type="checkbox" id="consent-check" style="width:auto;margin-right:0.5rem">
+        I have read the information above and I consent to participate.</label>
+    </div>
+    <div style="margin-top:1rem">
+      <label for="lang-select">Preferred language</label>
+      <select id="lang-select">
+        <option value="en">English</option>
+        <option value="fr">Français</option>
+      </select>
+    </div>
+    <button class="btn-primary" onclick="startDemographics()">Continue</button>
+    <div class="error" id="err-consent"></div>
+  </div>
+
+  <!-- ===== DEMOGRAPHICS PAGE ===== -->
+  <div id="page-demographics" class="hidden">
+    <h1>About you</h1>
+    <p class="small" style="margin-bottom:1rem">All fields are required.</p>
+    <label for="prolific-id">Prolific ID (use any string for testing)</label>
+    <input type="text" id="prolific-id" placeholder="e.g. test_participant_01" value="test_participant_01">
+    <div class="field-row">
+      <div>
+        <label for="age">Age</label>
+        <input type="number" id="age" min="18" max="99" placeholder="e.g. 34" value="30">
+      </div>
+      <div>
+        <label for="gender">Gender</label>
+        <select id="gender">
+          <option value="">-- select --</option>
+          <option selected>Woman</option>
+          <option>Man</option>
+          <option>Non-binary / third gender</option>
+          <option>Prefer not to say</option>
+        </select>
+      </div>
+    </div>
+    <label for="country">Country of origin</label>
+    <input type="text" id="country" placeholder="e.g. Norway" value="Norway">
+    <label for="first-language">First language</label>
+    <input type="text" id="first-language" placeholder="e.g. Norwegian" value="Norwegian">
+    <button class="btn-primary" onclick="startSurvey()">Start survey</button>
+    <div class="error" id="err-demo"></div>
+  </div>
+
+  <!-- ===== SURVEY PAGE ===== -->
+  <div id="page-survey" class="hidden">
+    <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+    <h2 id="scenario-counter">Situation 1 of 27</h2>
+    <div class="scenario-text" id="scenario-text">Loading…</div>
+    <p class="question" id="question-text">How socially appropriate is the action described?</p>
+    <div class="response-buttons" id="response-buttons"></div>
+    <button class="btn-primary" id="btn-next" disabled onclick="nextScenario()">Next</button>
+    <div class="error" id="err-survey"></div>
+  </div>
+
+  <!-- ===== COMPLETION PAGE ===== -->
+  <div id="page-done" class="hidden">
+    <h1>Thank you!</h1>
+    <p>You have completed all <span id="done-count"></span> scenarios.</p>
+    <p>In the real study you would return to Prolific with the completion code: <strong>COGEMI2025</strong></p>
+    <p class="small">In this test, responses were saved to <code>localStorage["cogemi_test_responses"]</code>.</p>
+    <button class="btn-secondary" onclick="downloadCSV()">Download responses (CSV)</button>
+    <button class="btn-secondary" onclick="clearAndRestart()" style="margin-top:0.5rem">Restart test</button>
+  </div>
+
+</div>
+
+<!-- Debug panel -->
+<div id="debug-panel">
+  <h3>Debug — responses so far</h3>
+  <div id="debug-log"></div>
+</div>
+
+<script>
+// =============================================================================
+// Mock google.script.run
+// This replaces the GAS RPC layer with synchronous local equivalents.
+// =============================================================================
+var google = {
+  script: {
+    run: {
+      _successHandler: null,
+      _failureHandler: null,
+      withSuccessHandler: function(fn) { this._successHandler = fn; return this; },
+      withFailureHandler: function(fn) { this._failureHandler = fn; return this; },
+      getScenariosForSession: function(lang) {
+        var self = this;
+        setTimeout(function() {
+          self._successHandler && self._successHandler(mockGetScenariosForSession(lang));
+        }, 50);
+      },
+      getResponseLabels: function() {
+        var self = this;
+        setTimeout(function() {
+          self._successHandler && self._successHandler(["Inappropriate", "Neutral", "Appropriate"]);
+        }, 50);
+      },
+      submitResponse: function(prolificId, scenarioId, response, age, gender, country, language) {
+        var self = this;
+        setTimeout(function() {
+          mockSubmitResponse(prolificId, scenarioId, response, age, gender, country, language);
+          self._successHandler && self._successHandler({ ok: true });
+        }, 30);
+      }
+    }
+  }
+};
+
+// =============================================================================
+// Scenario data (mirrored from appropriateness_survey.gs)
+// =============================================================================
+var SCENARIOS = [
+  { id: "sa_cutinline_supermarket",     en: "Someone walks past a queue of people and goes straight to the front at the supermarket checkout.", fr: "Quelqu'un dépasse la file et passe directement à la caisse du supermarché." },
+  { id: "sa_cutinline_cinema",          en: "Someone pushes in front of others waiting to buy tickets at the cinema.", fr: "Quelqu'un s'insère devant les autres dans la file d'attente au cinéma." },
+  { id: "sa_cutinline_busstop",         en: "Someone jumps the queue at a busy bus stop, boarding before people who have waited longer.", fr: "Quelqu'un grille la priorité à un arrêt de bus bondé." },
+  { id: "sa_cutinline_emergency",       en: "Someone who is visibly unwell asks to move to the front of the queue at a pharmacy.", fr: "Une personne visiblement malade demande à passer devant dans la file d'attente à la pharmacie." },
+  { id: "sa_cutinline_border",          en: "A traveller with a connecting flight in 20 minutes asks to move ahead in the passport control queue.", fr: "Un voyageur avec une correspondance dans 20 minutes demande à passer devant au contrôle des passeports." },
+  { id: "sa_holdoor_office",            en: "Someone holds the door open for a colleague directly behind them at the office entrance.", fr: "Quelqu'un tient la porte à un collègue juste derrière lui à l'entrée du bureau." },
+  { id: "sa_holdoor_elevator",          en: "Someone holds the elevator for a person running toward it from across the lobby.", fr: "Quelqu'un retient l'ascenseur pour quelqu'un qui court depuis l'autre bout du hall." },
+  { id: "sa_holdoor_shop",              en: "Someone holds the door open for a stranger carrying heavy shopping bags.", fr: "Quelqu'un tient la porte à un inconnu chargé de sacs de courses." },
+  { id: "sa_holdoor_street",            en: "Someone holds a heavy gate open for a cyclist they don't know on the street.", fr: "Quelqu'un maintient un portail pour un cycliste inconnu dans la rue." },
+  { id: "sa_holdoor_rain",              en: "Someone stands in the rain for a full minute holding a door because a person is still far away.", fr: "Quelqu'un reste sous la pluie pendant une minute entière à tenir la porte alors que la personne est encore loin." },
+  { id: "sa_speakloud_library",         en: "Someone takes a phone call and speaks at normal conversational volume in a quiet library.", fr: "Quelqu'un répond à un appel et parle normalement dans une bibliothèque silencieuse." },
+  { id: "sa_speakloud_cafe",            en: "Someone has a loud, laughing conversation on their phone in a busy café.", fr: "Quelqu'un rit et parle fort au téléphone dans un café animé." },
+  { id: "sa_speakloud_restaurant",      en: "Someone speaks so loudly on a call that nearby diners at a restaurant can hear every word.", fr: "Quelqu'un parle si fort au téléphone dans un restaurant que les clients voisins entendent tout." },
+  { id: "sa_speakloud_cinema",          en: "Someone narrates the film to their companion in a normal speaking voice during a screening.", fr: "Quelqu'un commente le film à voix normale pendant une projection." },
+  { id: "sa_speakloud_publictransport", en: "Someone listens to music without headphones on a busy commuter train.", fr: "Quelqu'un écoute de la musique sans écouteurs dans un train bondé." },
+  { id: "sa_phonetable_family_dinner",  en: "Someone scrolls through their phone throughout a family dinner without joining the conversation.", fr: "Quelqu'un fait défiler son téléphone tout au long d'un dîner de famille sans participer à la conversation." },
+  { id: "sa_phonetable_date",           en: "Someone checks their phone several times while on a first date at a restaurant.", fr: "Quelqu'un vérifie son téléphone plusieurs fois lors d'un premier rendez-vous au restaurant." },
+  { id: "sa_phonetable_meeting",        en: "Someone replies to messages on their phone during a work meeting.", fr: "Quelqu'un répond à des messages sur son téléphone pendant une réunion de travail." },
+  { id: "sa_phonetable_funeral",        en: "Someone silently reads messages on their phone during a funeral reception.", fr: "Quelqu'un lit silencieusement des messages sur son téléphone lors d'une réception funèbre." },
+  { id: "sa_phonetable_cafe",           en: "Someone places their phone face-up on the café table but does not look at it during a conversation.", fr: "Quelqu'un pose son téléphone face visible sur la table au café mais ne le regarde pas pendant la conversation." },
+  { id: "sa_littering_park",            en: "Someone drops an empty crisp packet on the ground in a public park.", fr: "Quelqu'un jette un paquet de chips vide par terre dans un parc public." },
+  { id: "sa_littering_beach",           en: "Someone leaves their picnic rubbish on the beach when they leave.", fr: "Quelqu'un laisse ses déchets de pique-nique sur la plage en partant." },
+  { id: "sa_littering_street",          en: "Someone drops a cigarette butt on the pavement rather than using a bin.", fr: "Quelqu'un jette un mégot sur le trottoir plutôt que de le mettre à la poubelle." },
+  { id: "sa_littering_publictransport", en: "Someone leaves a newspaper on their seat when getting off the bus.", fr: "Quelqu'un laisse un journal sur son siège en descendant du bus." },
+  { id: "sa_littering_forest",          en: "Someone buries their food waste in the forest while hiking and leaves no trace on the surface.", fr: "Quelqu'un enfouit ses déchets alimentaires dans la forêt pendant une randonnée sans laisser de trace en surface." },
+  { id: "sa_ignoregreet_office",        en: "A colleague says good morning and the person walks past without responding.", fr: "Un collègue dit bonjour et la personne passe sans répondre." },
+  { id: "sa_ignoregreet_neighborhood",  en: "A neighbour waves hello and the person pretends not to see them.", fr: "Un voisin fait un signe de la main et la personne fait semblant de ne pas le voir." },
+  { id: "sa_ignoregreet_gym",           en: "A regular gym acquaintance greets someone and they put their headphones on without acknowledging them.", fr: "Une connaissance habituelle de la salle de sport salue quelqu'un qui met ses écouteurs sans lui répondre." },
+  { id: "sa_ignoregreet_elevator",      en: "Someone steps into an elevator, makes eye contact with another person already inside, and says nothing.", fr: "Quelqu'un entre dans un ascenseur, croise le regard de l'autre personne et ne dit rien." },
+  { id: "sa_ignoregreet_party",         en: "A person at a party ignores someone who introduces themselves and turns away to talk to someone else.", fr: "Une personne à une fête ignore quelqu'un qui se présente et se retourne pour parler à quelqu'un d'autre." },
+  { id: "sa_offerhelp_directions",      en: "Someone overhears a tourist looking confused and offers directions unprompted.", fr: "Quelqu'un entend un touriste perdu et lui propose spontanément de l'aider." },
+  { id: "sa_offerhelp_grocerybags",     en: "Someone offers to carry an elderly person's heavy grocery bags to their car.", fr: "Quelqu'un propose de porter les lourds sacs de course d'une personne âgée jusqu'à sa voiture." },
+  { id: "sa_offerhelp_door",            en: "Someone rushes ahead to open a door for a person in a wheelchair.", fr: "Quelqu'un se dépêche d'ouvrir une porte à une personne en fauteuil roulant." },
+  { id: "sa_offerhelp_crying",          en: "A stranger sitting nearby is crying quietly; someone touches their arm and asks if they are okay.", fr: "Un inconnu assis à côté pleure silencieusement ; quelqu'un lui touche le bras et lui demande si ça va." },
+  { id: "sa_offerhelp_fallen",          en: "Someone falls on the street and a passer-by immediately stops to help them up.", fr: "Quelqu'un tombe dans la rue et un passant s'arrête immédiatement pour l'aider à se relever." },
+  { id: "sa_personalspace_queue",       en: "Someone stands very close behind the person in front of them in a queue, almost touching.", fr: "Quelqu'un se tient très près derrière la personne devant lui dans une file, presque en contact." },
+  { id: "sa_personalspace_elevator",    en: "Someone stands in the centre of an empty elevator, leaving only a small space for another person who enters.", fr: "Quelqu'un se place au centre d'un ascenseur vide, laissant peu de place à la personne qui entre." },
+  { id: "sa_personalspace_emptybus",    en: "Someone chooses to sit directly next to a stranger on an otherwise empty bus.", fr: "Quelqu'un choisit de s'asseoir juste à côté d'un inconnu dans un bus autrement vide." },
+  { id: "sa_personalspace_bench",       en: "Someone sits at the far end of a park bench to maintain distance from the only other person there.", fr: "Quelqu'un s'assoit à l'autre bout d'un banc de parc pour maintenir une distance avec l'autre personne." },
+  { id: "sa_personalspace_waiting_room",en: "Someone sits directly next to a person in a waiting room when many other seats are available.", fr: "Quelqu'un s'assoit juste à côté d'une personne dans une salle d'attente alors que beaucoup d'autres sièges sont libres." }
+];
+
+var ATTENTION_CHECKS = [
+  { id: "sa_check_appropriate",   en: "Someone holds the door open for the person directly behind them.",                                     fr: "Quelqu'un tient la porte à la personne juste derrière lui.",                                          expected: "Appropriate" },
+  { id: "sa_check_inappropriate", en: "Someone pushes past everyone waiting and barges to the front of the queue at a hospital reception.", fr: "Quelqu'un bouscule tout le monde et se place en tête de file à l'accueil d'un hôpital.", expected: "Inappropriate" }
+];
+
+// =============================================================================
+// Mock backend functions
+// =============================================================================
+
+function mockGetScenariosForSession(lang) {
+  var pool = SCENARIOS.slice();
+  // Fisher-Yates shuffle
+  for (var i = pool.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp;
+  }
+  pool.splice(7,  0, ATTENTION_CHECKS[0]);
+  pool.splice(17, 0, ATTENTION_CHECKS[1]);
+  return pool.map(function(s) {
+    return { id: s.id, text: lang === "fr" ? s.fr : s.en, expected: s.expected || null };
+  });
+}
+
+function mockSubmitResponse(prolificId, scenarioId, response, age, gender, country, language) {
+  var stored = JSON.parse(localStorage.getItem("cogemi_test_responses") || "[]");
+  stored.push({
+    timestamp:   new Date().toISOString(),
+    prolific_id: prolificId,
+    scenario_id: scenarioId,
+    response:    response,
+    age:         age,
+    gender:      gender,
+    country:     country,
+    language:    language
+  });
+  localStorage.setItem("cogemi_test_responses", JSON.stringify(stored));
+  debugLog(scenarioId, response);
+}
+
+// =============================================================================
+// Survey state & logic (identical to production)
+// =============================================================================
+var state = {
+  lang: "en", prolificId: "", age: "", gender: "", country: "", firstLang: "",
+  scenarios: [], current: 0, selected: null, labels: []
+};
+
+var QUESTIONS = {
+  en: "How socially appropriate is the action described?",
+  fr: "Dans quelle mesure l'action décrite est-elle socialement appropriée ?"
+};
+
+function show(id) {
+  ["page-consent","page-demographics","page-survey","page-done"].forEach(function(p) {
+    document.getElementById(p).classList.add("hidden");
+  });
+  document.getElementById(id).classList.remove("hidden");
+}
+
+function startDemographics() {
+  if (!document.getElementById("consent-check").checked) {
+    document.getElementById("err-consent").textContent = "Please tick the consent box to continue.";
+    return;
+  }
+  state.lang = document.getElementById("lang-select").value;
+  show("page-demographics");
+}
+
+function startSurvey() {
+  var pid = document.getElementById("prolific-id").value.trim();
+  var age = document.getElementById("age").value.trim();
+  var gen = document.getElementById("gender").value;
+  var cty = document.getElementById("country").value.trim();
+  var fl  = document.getElementById("first-language").value.trim();
+  if (!pid || !age || !gen || !cty || !fl) {
+    document.getElementById("err-demo").textContent = "Please fill in all fields.";
+    return;
+  }
+  state.prolificId = pid; state.age = age; state.gender = gen;
+  state.country = cty;    state.firstLang = fl;
+
+  google.script.run
+    .withSuccessHandler(function(scenarios) {
+      state.scenarios = scenarios;
+      google.script.run
+        .withSuccessHandler(function(labels) {
+          state.labels = labels;
+          show("page-survey");
+          renderScenario();
+        })
+        .getResponseLabels();
+    })
+    .getScenariosForSession(state.lang);
+}
+
+function renderScenario() {
+  var s     = state.scenarios[state.current];
+  var total = state.scenarios.length;
+  document.getElementById("scenario-counter").textContent =
+    "Situation " + (state.current + 1) + " of " + total;
+  document.getElementById("scenario-text").textContent = s.text;
+  document.getElementById("question-text").textContent = QUESTIONS[state.lang] || QUESTIONS.en;
+  var pct = Math.round((state.current / total) * 100);
+  document.getElementById("progress-fill").style.width = pct + "%";
+
+  var container = document.getElementById("response-buttons");
+  container.innerHTML = "";
+  state.labels.forEach(function(label) {
+    var btn = document.createElement("button");
+    btn.className = "response-btn";
+    btn.textContent = label;
+    btn.onclick = function() { selectResponse(label, btn); };
+    container.appendChild(btn);
+  });
+  state.selected = null;
+  document.getElementById("btn-next").disabled = true;
+  document.getElementById("err-survey").textContent = "";
+}
+
+function selectResponse(label, btn) {
+  document.querySelectorAll(".response-btn").forEach(function(b) { b.classList.remove("selected"); });
+  btn.classList.add("selected");
+  state.selected = label;
+  document.getElementById("btn-next").disabled = false;
+}
+
+function nextScenario() {
+  if (!state.selected) return;
+  var scenarioId = state.scenarios[state.current].id;
+  document.getElementById("btn-next").disabled = true;
+
+  google.script.run
+    .withSuccessHandler(function(result) {
+      if (!result.ok) {
+        document.getElementById("err-survey").textContent = "Save error — try again.";
+        document.getElementById("btn-next").disabled = false;
+        return;
+      }
+      state.current++;
+      if (state.current >= state.scenarios.length) {
+        document.getElementById("done-count").textContent = state.scenarios.length;
+        show("page-done");
+        document.getElementById("debug-panel").style.display = "none";
+      } else {
+        renderScenario();
+      }
+    })
+    .submitResponse(
+      state.prolificId, scenarioId, state.selected,
+      state.age, state.gender, state.country, state.firstLang
+    );
+}
+
+// =============================================================================
+// Debug panel
+// =============================================================================
+
+function debugLog(scenarioId, response) {
+  var stored = JSON.parse(localStorage.getItem("cogemi_test_responses") || "[]");
+  var log    = document.getElementById("debug-log");
+  var entry  = document.createElement("div");
+
+  // Check attention check correctness
+  var attn = ATTENTION_CHECKS.find(function(a) { return a.id === scenarioId; });
+  var label = "";
+  if (attn) {
+    var pass = response === attn.expected;
+    label = pass
+      ? '<span class="attn-pass"> ✓ attn pass</span>'
+      : '<span class="attn-fail"> ✗ attn FAIL (expected: ' + attn.expected + ')</span>';
+  }
+
+  entry.innerHTML = "<strong>" + stored.length + ".</strong> " +
+    scenarioId.replace("sa_", "") + " → " + response + label;
+  log.appendChild(entry);
+  log.scrollTop = log.scrollHeight;
+}
+
+// =============================================================================
+// CSV download
+// =============================================================================
+
+function downloadCSV() {
+  var data = JSON.parse(localStorage.getItem("cogemi_test_responses") || "[]");
+  if (!data.length) { alert("No responses found."); return; }
+
+  var header = ["timestamp","prolific_id","scenario_id","response","age","gender","country","language"];
+  var rows   = data.map(function(r) {
+    return header.map(function(k) { return '"' + (r[k] || "") + '"'; }).join(",");
+  });
+  var csv  = header.join(",") + "\n" + rows.join("\n");
+  var blob = new Blob([csv], { type: "text/csv" });
+  var url  = URL.createObjectURL(blob);
+  var a    = document.createElement("a");
+  a.href  = url; a.download = "cogemi_test_responses.csv"; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function clearAndRestart() {
+  localStorage.removeItem("cogemi_test_responses");
+  location.reload();
+}
+</script>
+</body>
+</html>
