@@ -123,75 +123,75 @@
   <!-- ===== CONSENT PAGE ===== -->
   <div id="page-consent">
     <div class="test-banner">⚠ LOCAL TEST MODE — responses saved to localStorage, not Google Sheets</div>
-    <h1>Social Appropriateness Study</h1>
-    <p>Thank you for taking part. This study investigates how people judge the social appropriateness of everyday actions.</p>
-    <p>You will read <strong>~27 short vignettes</strong> describing everyday situations and rate how socially appropriate the action is on a 3-point scale. The study takes approximately <strong>8 minutes</strong>.</p>
-    <p><strong>Your data:</strong> Responses are stored securely and linked only to your Prolific ID, which will be removed from the analysis dataset after payment. Participation is voluntary; you may withdraw at any time.</p>
-    <p class="small">This research is conducted by [Institution]. If you have questions, contact [email].</p>
+    <h1 id="ui-consent-title"></h1>
+    <p id="ui-consent-p1"></p>
+    <p id="ui-consent-p2"></p>
+    <p id="ui-consent-p3"></p>
+    <p class="small" id="ui-consent-p4"></p>
     <div style="margin-top:1.25rem">
       <label><input type="checkbox" id="consent-check" style="width:auto;margin-right:0.5rem">
-        I have read the information above and I consent to participate.</label>
+        <span id="ui-consent-label"></span></label>
     </div>
     <div style="margin-top:1rem">
-      <label for="lang-select">Preferred language</label>
-      <select id="lang-select">
+      <label for="lang-select" id="ui-lang-label"></label>
+      <select id="lang-select" onchange="translateUI(this.value)">
         <option value="en">English</option>
         <option value="fr">Français</option>
       </select>
     </div>
-    <button class="btn-primary" onclick="startDemographics()">Continue</button>
+    <button class="btn-primary" id="ui-btn-consent" onclick="startDemographics()"></button>
     <div class="error" id="err-consent"></div>
   </div>
 
   <!-- ===== DEMOGRAPHICS PAGE ===== -->
   <div id="page-demographics" class="hidden">
-    <h1>About you</h1>
-    <p class="small" style="margin-bottom:1rem">All fields are required.</p>
-    <label for="prolific-id">Prolific ID (use any string for testing)</label>
+    <h1 id="ui-demo-title"></h1>
+    <p class="small" style="margin-bottom:1rem" id="ui-demo-subtitle"></p>
+    <label for="prolific-id" id="ui-label-prolific"></label>
     <input type="text" id="prolific-id" placeholder="e.g. test_participant_01" value="test_participant_01">
     <div class="field-row">
       <div>
-        <label for="age">Age</label>
+        <label for="age" id="ui-label-age"></label>
         <input type="number" id="age" min="18" max="99" placeholder="e.g. 34" value="30">
       </div>
       <div>
-        <label for="gender">Gender</label>
+        <label for="gender" id="ui-label-gender"></label>
         <select id="gender">
-          <option value="">-- select --</option>
-          <option selected>Woman</option>
-          <option>Man</option>
-          <option>Non-binary / third gender</option>
-          <option>Prefer not to say</option>
+          <option value="" id="ui-gender-select"></option>
+          <option value="Woman"    id="ui-gender-woman"></option>
+          <option value="Man"      id="ui-gender-man"></option>
+          <option value="Nonbinary" id="ui-gender-nonbinary"></option>
+          <option value="Prefer"   id="ui-gender-prefer"></option>
         </select>
       </div>
     </div>
-    <label for="country">Country of origin</label>
+    <label for="country" id="ui-label-country"></label>
     <input type="text" id="country" placeholder="e.g. Norway" value="Norway">
-    <label for="first-language">First language</label>
+    <label for="first-language" id="ui-label-firstlang"></label>
     <input type="text" id="first-language" placeholder="e.g. Norwegian" value="Norwegian">
-    <button class="btn-primary" onclick="startSurvey()">Start survey</button>
+    <button class="btn-primary" id="ui-btn-start" onclick="startSurvey()"></button>
     <div class="error" id="err-demo"></div>
   </div>
 
   <!-- ===== SURVEY PAGE ===== -->
   <div id="page-survey" class="hidden">
     <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
-    <h2 id="scenario-counter">Situation 1 of 27</h2>
+    <h2 id="scenario-counter"></h2>
     <div class="scenario-text" id="scenario-text">Loading…</div>
-    <p class="question" id="question-text">How socially appropriate is the action described?</p>
+    <p class="question" id="question-text"></p>
     <div class="response-buttons" id="response-buttons"></div>
-    <button class="btn-primary" id="btn-next" disabled onclick="nextScenario()">Next</button>
+    <button class="btn-primary" id="btn-next" disabled onclick="nextScenario()"></button>
     <div class="error" id="err-survey"></div>
   </div>
 
   <!-- ===== COMPLETION PAGE ===== -->
   <div id="page-done" class="hidden">
-    <h1>Thank you!</h1>
-    <p>You have completed all <span id="done-count"></span> scenarios.</p>
-    <p>In the real study you would return to Prolific with the completion code: <strong>COGEMI2025</strong></p>
-    <p class="small">In this test, responses were saved to <code>localStorage["cogemi_test_responses"]</code>.</p>
-    <button class="btn-secondary" onclick="downloadCSV()">Download responses (CSV)</button>
-    <button class="btn-secondary" onclick="clearAndRestart()" style="margin-top:0.5rem">Restart test</button>
+    <h1 id="ui-done-title"></h1>
+    <p id="ui-done-p1">— <span id="done-count"></span> —</p>
+    <p id="ui-done-p2"></p>
+    <p class="small" id="ui-done-p3"></p>
+    <button class="btn-secondary" id="ui-btn-download" onclick="downloadCSV()"></button>
+    <button class="btn-secondary" id="ui-btn-restart" onclick="clearAndRestart()" style="margin-top:0.5rem"></button>
   </div>
 
 </div>
@@ -292,6 +292,121 @@ var ATTENTION_CHECKS = [
 // Mock backend functions
 // =============================================================================
 
+// =============================================================================
+// UI translations
+// =============================================================================
+var UI_TEXT = {
+  en: {
+    "consent-title":    "Social Appropriateness Study",
+    "consent-p1":       "Thank you for taking part. This study investigates how people judge the social appropriateness of everyday actions.",
+    "consent-p2":       "You will read <strong>~27 short vignettes</strong> describing everyday situations and rate how socially appropriate the action is on a 3-point scale. The study takes approximately <strong>8 minutes</strong>.",
+    "consent-p3":       "<strong>Your data:</strong> Responses are stored securely and linked only to your Prolific ID, which will be removed from the analysis dataset after payment. Participation is voluntary; you may withdraw at any time.",
+    "consent-p4":       "This research is conducted by [Institution]. If you have questions, contact [email].",
+    "consent-label":    "I have read the information above and I consent to participate.",
+    "lang-label":       "Preferred language",
+    "btn-consent":      "Continue",
+    "demo-title":       "About you",
+    "demo-subtitle":    "All fields are required.",
+    "label-prolific":   "Prolific ID (use any string for testing)",
+    "label-age":        "Age",
+    "label-gender":     "Gender",
+    "gender-select":    "-- select --",
+    "gender-woman":     "Woman",
+    "gender-man":       "Man",
+    "gender-nonbinary": "Non-binary / third gender",
+    "gender-prefer":    "Prefer not to say",
+    "label-country":    "Country of origin",
+    "label-firstlang":  "First language",
+    "btn-start":        "Start survey",
+    "btn-next":         "Next",
+    "done-title":       "Thank you!",
+    "done-p1-pre":      "You have completed all",
+    "done-p1-post":     "scenarios.",
+    "done-p2":          "In the real study you would return to Prolific with the completion code: <strong>COGEMI2025</strong>",
+    "done-p3":          "In this test, responses were saved to <code>localStorage[\"cogemi_test_responses\"]</code>.",
+    "btn-download":     "Download responses (CSV)",
+    "btn-restart":      "Restart test"
+  },
+  fr: {
+    "consent-title":    "Étude sur l'acceptabilité sociale",
+    "consent-p1":       "Merci de participer. Cette étude examine comment les gens jugent l'acceptabilité sociale d'actions du quotidien.",
+    "consent-p2":       "Vous lirez <strong>~27 courtes vignettes</strong> décrivant des situations du quotidien et évaluerez l'acceptabilité sociale de l'action sur une échelle à 3 points. L'étude dure environ <strong>8 minutes</strong>.",
+    "consent-p3":       "<strong>Vos données :</strong> Les réponses sont stockées de manière sécurisée et associées uniquement à votre identifiant Prolific, qui sera supprimé du jeu de données après le paiement. La participation est volontaire ; vous pouvez vous retirer à tout moment.",
+    "consent-p4":       "Cette recherche est menée par [Institution]. Pour toute question, contactez [email].",
+    "consent-label":    "J'ai lu les informations ci-dessus et je consens à participer.",
+    "lang-label":       "Langue préférée",
+    "btn-consent":      "Continuer",
+    "demo-title":       "À propos de vous",
+    "demo-subtitle":    "Tous les champs sont obligatoires.",
+    "label-prolific":   "Identifiant Prolific (entrez n'importe quelle chaîne pour le test)",
+    "label-age":        "Âge",
+    "label-gender":     "Genre",
+    "gender-select":    "-- sélectionner --",
+    "gender-woman":     "Femme",
+    "gender-man":       "Homme",
+    "gender-nonbinary": "Non-binaire / troisième genre",
+    "gender-prefer":    "Préfère ne pas répondre",
+    "label-country":    "Pays d'origine",
+    "label-firstlang":  "Langue maternelle",
+    "btn-start":        "Commencer l'enquête",
+    "btn-next":         "Suivant",
+    "done-title":       "Merci !",
+    "done-p1-pre":      "Vous avez complété les",
+    "done-p1-post":     "situations.",
+    "done-p2":          "Dans la vraie étude, vous retourneriez sur Prolific avec le code de complétion : <strong>COGEMI2025</strong>",
+    "done-p3":          "Dans ce test, les réponses ont été enregistrées dans <code>localStorage[\"cogemi_test_responses\"]</code>.",
+    "btn-download":     "Télécharger les réponses (CSV)",
+    "btn-restart":      "Recommencer le test"
+  }
+};
+
+function translateUI(lang) {
+  var t = UI_TEXT[lang] || UI_TEXT.en;
+  var ids = [
+    ["ui-consent-title",    "consent-title",    "textContent"],
+    ["ui-consent-p1",       "consent-p1",       "innerHTML"],
+    ["ui-consent-p2",       "consent-p2",       "innerHTML"],
+    ["ui-consent-p3",       "consent-p3",       "innerHTML"],
+    ["ui-consent-p4",       "consent-p4",       "textContent"],
+    ["ui-consent-label",    "consent-label",    "textContent"],
+    ["ui-lang-label",       "lang-label",       "textContent"],
+    ["ui-btn-consent",      "btn-consent",      "textContent"],
+    ["ui-demo-title",       "demo-title",       "textContent"],
+    ["ui-demo-subtitle",    "demo-subtitle",    "textContent"],
+    ["ui-label-prolific",   "label-prolific",   "textContent"],
+    ["ui-label-age",        "label-age",        "textContent"],
+    ["ui-label-gender",     "label-gender",     "textContent"],
+    ["ui-gender-select",    "gender-select",    "textContent"],
+    ["ui-gender-woman",     "gender-woman",     "textContent"],
+    ["ui-gender-man",       "gender-man",       "textContent"],
+    ["ui-gender-nonbinary", "gender-nonbinary", "textContent"],
+    ["ui-gender-prefer",    "gender-prefer",    "textContent"],
+    ["ui-label-country",    "label-country",    "textContent"],
+    ["ui-label-firstlang",  "label-firstlang",  "textContent"],
+    ["ui-btn-start",        "btn-start",        "textContent"],
+    ["btn-next",            "btn-next",         "textContent"],
+    ["ui-done-title",       "done-title",       "textContent"],
+    ["ui-done-p2",          "done-p2",          "innerHTML"],
+    ["ui-done-p3",          "done-p3",          "innerHTML"],
+    ["ui-btn-download",     "btn-download",     "textContent"],
+    ["ui-btn-restart",      "btn-restart",      "textContent"]
+  ];
+  ids.forEach(function(row) {
+    var el = document.getElementById(row[0]);
+    if (el) el[row[2]] = t[row[1]];
+  });
+  // "done-p1" has a <span> inside — update surrounding text only
+  var p1 = document.getElementById("ui-done-p1");
+  if (p1) {
+    var count = document.getElementById("done-count");
+    var n = count ? count.textContent : "";
+    p1.innerHTML = t["done-p1-pre"] + ' <span id="done-count">' + n + '</span> ' + t["done-p1-post"];
+  }
+}
+
+// Initialise with English on page load
+translateUI("en");
+
 var RESPONSE_LABELS = {
   en: ["Inappropriate", "Neutral", "Appropriate"],
   fr: ["Inapproprié",   "Neutre",  "Approprié"]
@@ -353,12 +468,17 @@ function show(id) {
   document.getElementById(id).classList.remove("hidden");
 }
 
+var ERR_CONSENT = { en: "Please tick the consent box to continue.", fr: "Veuillez cocher la case de consentement pour continuer." };
+var ERR_DEMO    = { en: "Please fill in all fields.", fr: "Veuillez remplir tous les champs." };
+var SITUATION   = { en: ["Situation", "of"], fr: ["Situation", "sur"] };
+
 function startDemographics() {
+  state.lang = document.getElementById("lang-select").value;
   if (!document.getElementById("consent-check").checked) {
-    document.getElementById("err-consent").textContent = "Please tick the consent box to continue.";
+    document.getElementById("err-consent").textContent = ERR_CONSENT[state.lang] || ERR_CONSENT.en;
     return;
   }
-  state.lang = document.getElementById("lang-select").value;
+  translateUI(state.lang);
   show("page-demographics");
 }
 
@@ -369,7 +489,7 @@ function startSurvey() {
   var cty = document.getElementById("country").value.trim();
   var fl  = document.getElementById("first-language").value.trim();
   if (!pid || !age || !gen || !cty || !fl) {
-    document.getElementById("err-demo").textContent = "Please fill in all fields.";
+    document.getElementById("err-demo").textContent = ERR_DEMO[state.lang] || ERR_DEMO.en;
     return;
   }
   state.prolificId = pid; state.age = age; state.gender = gen;
@@ -392,8 +512,9 @@ function startSurvey() {
 function renderScenario() {
   var s     = state.scenarios[state.current];
   var total = state.scenarios.length;
+  var sit = SITUATION[state.lang] || SITUATION.en;
   document.getElementById("scenario-counter").textContent =
-    "Situation " + (state.current + 1) + " of " + total;
+    sit[0] + " " + (state.current + 1) + " " + sit[1] + " " + total;
   document.getElementById("scenario-text").textContent = s.text;
   document.getElementById("question-text").textContent = QUESTIONS[state.lang] || QUESTIONS.en;
   var pct = Math.round((state.current / total) * 100);
