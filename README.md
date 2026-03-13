@@ -93,6 +93,54 @@ contexts_dict: {
 
 ---
 
-## TODO How to use
+## Installation
+
+**Requirements:** Python 3.10+, and [Ollama](https://ollama.com/) running locally (or an OpenAI-compatible API).
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/trondarild/COGEMI_RL.git
+cd COGEMI_RL
+
+# 2. Create and activate a virtual environment
+python -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+
+# 3. Install the package and dependencies
+pip install -e .
+```
+
+### LLM configuration
+
+By default COGEMI uses a local Ollama server with the `qwen3:1.7b` model. Copy and edit `cogemi_config.yaml` to change provider or model:
+
+```yaml
+llm:
+  provider: ollama          # or "openai"
+  model: qwen3:1.7b
+  base_url: http://localhost:11434
+  # api_key: ""             # set here or via COGEMI_API_KEY env var
+```
+
+For an OpenAI-compatible API:
+
+```bash
+pip install openai
+export COGEMI_API_KEY=sk-...
+```
+
+Then set `provider: openai` and your chosen `model` in `cogemi_config.yaml`.
+
+### Running tests
+
+```bash
+# All tests (LLM tests auto-skip if Ollama is not running)
+.venv/bin/python -m pytest tests/ -v
+
+# Stub-only (no Ollama required, ~2 s)
+.venv/bin/python -m pytest tests/ -v -k "not ollama"
+```
+
+---
 
 ## Examples

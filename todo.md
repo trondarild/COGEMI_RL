@@ -22,12 +22,14 @@
 ## Source code control, github
 - [x] update .gitignore to exclude unneccesary R files and data files that should be downloaded not stored (SCRUPL, NORMBANK)
 - [x] commit current version
-- [ ] clean up, delete unneccessary files (out.py, out.txt, scratch files in root)
-- [ ] update and tidy file structure
+- [x] clean up, delete unneccessary files (out.py, out.txt, scratch files in root)
+- [x] update and tidy file structure
 ## Documentation
-- [ ] update readme.md with installation procedure
+- [x] update readme.md with installation procedure
 ## Online experiments
 - [ ] prepare online experiments to gather data for social appropriateness
+    - [ ] make a plan for carrying out experiments
     - [ ] prepare budget for Prolific experiment
     - [ ] code up experiment forms
     - [ ] test experiment
+    - [ ] interface with Prolific and set up experiment
