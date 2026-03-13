@@ -28,8 +28,8 @@
 - [x] update readme.md with installation procedure
 ## Online experiments
 - [ ] prepare online experiments to gather data for social appropriateness
-    - [ ] make a plan for carrying out experiments
-    - [ ] prepare budget for Prolific experiment
-    - [ ] code up experiment forms
+    - [x] make a plan for carrying out experiments
+    - [x] prepare budget for Prolific experiment
+    - [x] code up experiment forms
     - [ ] test experiment
     - [ ] interface with Prolific and set up experiment

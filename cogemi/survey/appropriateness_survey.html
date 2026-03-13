@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Social Appropriateness Study</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f5f5f5;
+      color: #222;
+      min-height: 100vh;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 2rem 1rem;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+      padding: 2rem;
+      max-width: 640px;
+      width: 100%;
+    }
+
+    h1 { font-size: 1.4rem; margin-bottom: 1rem; }
+    h2 { font-size: 1.1rem; margin-bottom: 0.75rem; color: #444; }
+    p  { line-height: 1.6; margin-bottom: 0.75rem; color: #333; }
+
+    .progress-bar {
+      height: 6px;
+      background: #e0e0e0;
+      border-radius: 3px;
+      margin-bottom: 1.5rem;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: #4a90d9;
+      border-radius: 3px;
+      transition: width 0.3s ease;
+    }
+
+    .scenario-text {
+      font-size: 1.05rem;
+      line-height: 1.65;
+      background: #f9f9f9;
+      border-left: 4px solid #4a90d9;
+      padding: 1rem 1.25rem;
+      border-radius: 0 6px 6px 0;
+      margin-bottom: 1.5rem;
+    }
+
+    .question {
+      font-weight: 600;
+      margin-bottom: 1rem;
+    }
+
+    .response-buttons {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .response-btn {
+      flex: 1;
+      min-width: 120px;
+      padding: 0.75rem 1rem;
+      border: 2px solid #ccc;
+      border-radius: 8px;
+      background: #fff;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .response-btn:hover { border-color: #4a90d9; background: #eaf2fb; }
+    .response-btn.selected { border-color: #4a90d9; background: #4a90d9; color: #fff; }
+
+    .btn-primary {
+      display: block;
+      width: 100%;
+      padding: 0.85rem;
+      background: #4a90d9;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 1.5rem;
+      transition: background 0.15s;
+    }
+    .btn-primary:hover  { background: #3578c0; }
+    .btn-primary:disabled { background: #aaa; cursor: not-allowed; }
+
+    label { display: block; margin-bottom: 0.4rem; font-weight: 500; }
+    input, select {
+      width: 100%;
+      padding: 0.55rem 0.75rem;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      margin-bottom: 1rem;
+    }
+
+    .field-row { display: flex; gap: 1rem; }
+    .field-row > div { flex: 1; }
+
+    .hidden { display: none; }
+    .small  { font-size: 0.85rem; color: #666; }
+
+    #status-msg { margin-top: 1rem; color: #c0392b; font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+<div class="card">
+
+  <!-- ===== CONSENT PAGE ===== -->
+  <div id="page-consent">
+    <h1>Social Appropriateness Study</h1>
+    <p>Thank you for taking part. This study investigates how people judge the social appropriateness of everyday actions.</p>
+    <p>You will read <strong>~27 short vignettes</strong> describing everyday situations and rate how socially appropriate the action is on a 3-point scale. The study takes approximately <strong>8 minutes</strong>.</p>
+    <p><strong>Your data:</strong> Responses are stored securely and linked only to your Prolific ID, which will be removed from the analysis dataset after payment. Participation is voluntary; you may withdraw at any time.</p>
+    <p class="small">This research is conducted by [Institution]. If you have questions, contact [email].</p>
+
+    <div style="margin-top:1.25rem">
+      <label><input type="checkbox" id="consent-check" style="width:auto;margin-right:0.5rem">
+        I have read the information above and I consent to participate.</label>
+    </div>
+
+    <div style="margin-top:1rem">
+      <label for="lang-select">Preferred language</label>
+      <select id="lang-select">
+        <option value="en">English</option>
+        <option value="fr">Français</option>
+      </select>
+    </div>
+
+    <button class="btn-primary" id="btn-consent" onclick="startDemographics()">Continue</button>
+    <div id="status-msg"></div>
+  </div>
+
+  <!-- ===== DEMOGRAPHICS PAGE ===== -->
+  <div id="page-demographics" class="hidden">
+    <h1>About you</h1>
+    <p class="small" style="margin-bottom:1rem">This information helps us understand variation across groups. All fields are required.</p>
+
+    <label for="prolific-id">Prolific ID</label>
+    <input type="text" id="prolific-id" placeholder="e.g. 5f3c2a...">
+
+    <div class="field-row">
+      <div>
+        <label for="age">Age</label>
+        <input type="number" id="age" min="18" max="99" placeholder="e.g. 34">
+      </div>
+      <div>
+        <label for="gender">Gender</label>
+        <select id="gender">
+          <option value="">-- select --</option>
+          <option>Woman</option>
+          <option>Man</option>
+          <option>Non-binary / third gender</option>
+          <option>Prefer not to say</option>
+        </select>
+      </div>
+    </div>
+
+    <label for="country">Country of origin</label>
+    <input type="text" id="country" placeholder="e.g. United Kingdom">
+
+    <label for="first-language">First language</label>
+    <input type="text" id="first-language" placeholder="e.g. English">
+
+    <button class="btn-primary" id="btn-demographics" onclick="startSurvey()">Start survey</button>
+    <div id="status-msg-demo"></div>
+  </div>
+
+  <!-- ===== SURVEY PAGE ===== -->
+  <div id="page-survey" class="hidden">
+    <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+
+    <h2 id="scenario-counter">Situation 1 of 27</h2>
+
+    <div class="scenario-text" id="scenario-text">Loading…</div>
+
+    <p class="question" id="question-text">How socially appropriate is the highlighted action?</p>
+
+    <div class="response-buttons" id="response-buttons">
+      <!-- filled by JS -->
+    </div>
+
+    <button class="btn-primary" id="btn-next" disabled onclick="nextScenario()">Next</button>
+    <div id="status-msg-survey"></div>
+  </div>
+
+  <!-- ===== COMPLETION PAGE ===== -->
+  <div id="page-done" class="hidden">
+    <h1>Thank you!</h1>
+    <p>You have completed the study. Your responses have been recorded.</p>
+    <p>Please return to Prolific and use the completion code: <strong id="completion-code" style="font-size:1.2rem"></strong></p>
+  </div>
+
+</div>
+
+<script>
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
+var state = {
+  lang:       "en",
+  prolificId: "",
+  age:        "",
+  gender:     "",
+  country:    "",
+  firstLang:  "",
+  scenarios:  [],
+  current:    0,
+  selected:   null,
+  labels:     []
+};
+
+var QUESTIONS = {
+  en: "How socially appropriate is the action described?",
+  fr: "Dans quelle mesure l'action décrite est-elle socialement appropriée ?"
+};
+
+var COMPLETION_CODE = "COGEMI2025";  // Replace with your Prolific completion code
+
+// ---------------------------------------------------------------------------
+// Page transitions
+// ---------------------------------------------------------------------------
+
+function show(id) {
+  ["page-consent","page-demographics","page-survey","page-done"].forEach(function(p) {
+    document.getElementById(p).classList.add("hidden");
+  });
+  document.getElementById(id).classList.remove("hidden");
+}
+
+function startDemographics() {
+  if (!document.getElementById("consent-check").checked) {
+    document.getElementById("status-msg").textContent = "Please tick the consent box to continue.";
+    return;
+  }
+  state.lang = document.getElementById("lang-select").value;
+  show("page-demographics");
+}
+
+function startSurvey() {
+  var pid  = document.getElementById("prolific-id").value.trim();
+  var age  = document.getElementById("age").value.trim();
+  var gen  = document.getElementById("gender").value;
+  var cty  = document.getElementById("country").value.trim();
+  var fl   = document.getElementById("first-language").value.trim();
+
+  if (!pid || !age || !gen || !cty || !fl) {
+    document.getElementById("status-msg-demo").textContent = "Please fill in all fields.";
+    return;
+  }
+
+  state.prolificId = pid;
+  state.age        = age;
+  state.gender     = gen;
+  state.country    = cty;
+  state.firstLang  = fl;
+
+  // Fetch scenarios and labels from the server
+  google.script.run
+    .withSuccessHandler(function(scenarios) {
+      state.scenarios = scenarios;
+      google.script.run
+        .withSuccessHandler(function(labels) {
+          state.labels = labels;
+          show("page-survey");
+          renderScenario();
+        })
+        .getResponseLabels();
+    })
+    .getScenariosForSession(state.lang);
+}
+
+// ---------------------------------------------------------------------------
+// Survey rendering
+// ---------------------------------------------------------------------------
+
+function renderScenario() {
+  var s     = state.scenarios[state.current];
+  var total = state.scenarios.length;
+
+  document.getElementById("scenario-counter").textContent =
+    "Situation " + (state.current + 1) + " of " + total;
+  document.getElementById("scenario-text").textContent = s.text;
+  document.getElementById("question-text").textContent = QUESTIONS[state.lang] || QUESTIONS.en;
+
+  var pct = Math.round((state.current / total) * 100);
+  document.getElementById("progress-fill").style.width = pct + "%";
+
+  // Build response buttons
+  var container = document.getElementById("response-buttons");
+  container.innerHTML = "";
+  state.labels.forEach(function(label) {
+    var btn = document.createElement("button");
+    btn.className = "response-btn";
+    btn.textContent = label;
+    btn.onclick = function() { selectResponse(label, btn); };
+    container.appendChild(btn);
+  });
+
+  state.selected = null;
+  document.getElementById("btn-next").disabled = true;
+  document.getElementById("status-msg-survey").textContent = "";
+}
+
+function selectResponse(label, btn) {
+  document.querySelectorAll(".response-btn").forEach(function(b) {
+    b.classList.remove("selected");
+  });
+  btn.classList.add("selected");
+  state.selected = label;
+  document.getElementById("btn-next").disabled = false;
+}
+
+function nextScenario() {
+  if (!state.selected) return;
+
+  var scenarioId = state.scenarios[state.current].id;
+  document.getElementById("btn-next").disabled = true;
+
+  google.script.run
+    .withSuccessHandler(function(result) {
+      if (!result.ok) {
+        document.getElementById("status-msg-survey").textContent =
+          "Save error: " + result.error + " — please try again.";
+        document.getElementById("btn-next").disabled = false;
+        return;
+      }
+      state.current++;
+      if (state.current >= state.scenarios.length) {
+        document.getElementById("completion-code").textContent = COMPLETION_CODE;
+        show("page-done");
+      } else {
+        renderScenario();
+      }
+    })
+    .withFailureHandler(function(err) {
+      document.getElementById("status-msg-survey").textContent =
+        "Network error — please check your connection and try again.";
+      document.getElementById("btn-next").disabled = false;
+    })
+    .submitResponse(
+      state.prolificId,
+      scenarioId,
+      state.selected,
+      state.age,
+      state.gender,
+      state.country,
+      state.firstLang
+    );
+}
+</script>
+</body>
+</html>
