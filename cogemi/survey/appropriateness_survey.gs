@@ -81,7 +81,14 @@ var ATTENTION_CHECKS = [
   { id: "sa_check_inappropriate", en: "Someone pushes past everyone waiting and barges to the front of the queue at a hospital reception.", fr: "Quelqu'un bouscule tout le monde et se place en tête de file à l'accueil d'un hôpital.", expected: "Inappropriate" }
 ];
 
-var RESPONSE_LABELS = ["Inappropriate", "Neutral", "Appropriate"];
+var RESPONSE_LABELS = {
+  en: ["Inappropriate", "Neutral", "Appropriate"],
+  fr: ["Inapproprié",   "Neutre",  "Approprié"]
+};
+
+// English values are the canonical keys used by the COGEMI judgment_map.
+// Translations are display-only; the stored response is always the English value.
+var RESPONSE_VALUES = ["Inappropriate", "Neutral", "Appropriate"];
 
 // ---------------------------------------------------------------------------
 // Web app entry point
@@ -114,8 +121,13 @@ function getScenariosForSession(language) {
   });
 }
 
-function getResponseLabels() {
-  return RESPONSE_LABELS;
+// Returns [{value, label}, ...] for the given language.
+// value = English key (stored in sheet); label = translated display text.
+function getResponseLabels(lang) {
+  var labels = RESPONSE_LABELS[lang] || RESPONSE_LABELS.en;
+  return RESPONSE_VALUES.map(function(v, i) {
+    return { value: v, label: labels[i] };
+  });
 }
 
 // ---------------------------------------------------------------------------

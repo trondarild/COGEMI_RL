@@ -220,10 +220,10 @@ var google = {
           self._successHandler && self._successHandler(mockGetScenariosForSession(lang));
         }, 50);
       },
-      getResponseLabels: function() {
+      getResponseLabels: function(lang) {
         var self = this;
         setTimeout(function() {
-          self._successHandler && self._successHandler(["Inappropriate", "Neutral", "Appropriate"]);
+          self._successHandler && self._successHandler(mockGetResponseLabels(lang));
         }, 50);
       },
       submitResponse: function(prolificId, scenarioId, response, age, gender, country, language) {
@@ -291,6 +291,17 @@ var ATTENTION_CHECKS = [
 // =============================================================================
 // Mock backend functions
 // =============================================================================
+
+var RESPONSE_LABELS = {
+  en: ["Inappropriate", "Neutral", "Appropriate"],
+  fr: ["Inapproprié",   "Neutre",  "Approprié"]
+};
+var RESPONSE_VALUES = ["Inappropriate", "Neutral", "Appropriate"];
+
+function mockGetResponseLabels(lang) {
+  var labels = RESPONSE_LABELS[lang] || RESPONSE_LABELS.en;
+  return RESPONSE_VALUES.map(function(v, i) { return { value: v, label: labels[i] }; });
+}
 
 function mockGetScenariosForSession(lang) {
   var pool = SCENARIOS.slice();
@@ -373,7 +384,7 @@ function startSurvey() {
           show("page-survey");
           renderScenario();
         })
-        .getResponseLabels();
+        .getResponseLabels(state.lang);
     })
     .getScenariosForSession(state.lang);
 }
@@ -390,11 +401,11 @@ function renderScenario() {
 
   var container = document.getElementById("response-buttons");
   container.innerHTML = "";
-  state.labels.forEach(function(label) {
+  state.labels.forEach(function(item) {
     var btn = document.createElement("button");
     btn.className = "response-btn";
-    btn.textContent = label;
-    btn.onclick = function() { selectResponse(label, btn); };
+    btn.textContent = item.label;
+    btn.onclick = function() { selectResponse(item.value, btn); };
     container.appendChild(btn);
   });
   state.selected = null;
@@ -402,10 +413,10 @@ function renderScenario() {
   document.getElementById("err-survey").textContent = "";
 }
 
-function selectResponse(label, btn) {
+function selectResponse(value, btn) {
   document.querySelectorAll(".response-btn").forEach(function(b) { b.classList.remove("selected"); });
   btn.classList.add("selected");
-  state.selected = label;
+  state.selected = value;
   document.getElementById("btn-next").disabled = false;
 }
 

@@ -278,7 +278,7 @@ function startSurvey() {
           show("page-survey");
           renderScenario();
         })
-        .getResponseLabels();
+        .getResponseLabels(state.lang);
     })
     .getScenariosForSession(state.lang);
 }
@@ -299,14 +299,14 @@ function renderScenario() {
   var pct = Math.round((state.current / total) * 100);
   document.getElementById("progress-fill").style.width = pct + "%";
 
-  // Build response buttons
+  // Build response buttons — label is display text, value is stored (English)
   var container = document.getElementById("response-buttons");
   container.innerHTML = "";
-  state.labels.forEach(function(label) {
+  state.labels.forEach(function(item) {
     var btn = document.createElement("button");
     btn.className = "response-btn";
-    btn.textContent = label;
-    btn.onclick = function() { selectResponse(label, btn); };
+    btn.textContent = item.label;
+    btn.onclick = function() { selectResponse(item.value, btn); };
     container.appendChild(btn);
   });
 
@@ -315,12 +315,12 @@ function renderScenario() {
   document.getElementById("status-msg-survey").textContent = "";
 }
 
-function selectResponse(label, btn) {
+function selectResponse(value, btn) {
   document.querySelectorAll(".response-btn").forEach(function(b) {
     b.classList.remove("selected");
   });
   btn.classList.add("selected");
-  state.selected = label;
+  state.selected = value;
   document.getElementById("btn-next").disabled = false;
 }
 
