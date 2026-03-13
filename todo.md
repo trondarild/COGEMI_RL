@@ -16,9 +16,9 @@
 - [ ] make a plan for implementing an extention to COGEMI so that it optionally supports scenarios with roles (as mentioned in context-plan.md. 
     - [x] specify clearly what supporting roles entails: each scenario can have at least two roles and possibly three: 1) agent 2) target (or a better label) 3) observer, where agent is the one in the scenario doing something to the target, while the observer is potentially a third party looking on. Example: a) someone (agent) opening door for an old person (target) b) someone (agent) is convinging someone (target) to work for them for a fixed rate and taking all profit c) someone (agent) is pressuring someone (target) to hand over their money d) someone (agent) is using their superior power to make someone (target) perform labor for minimal pay  -> affords asking survery questions like "for the [agent/target] is this situation [unjust] [neutral] [just]" "as an observer do you judge the action of the agent on the target as [unjust] [neutral] [just]" "for the [agent/target] is this situation [effortful,costly] [neutral] [effortless,gainful] in terms of energy"
     - [x] map out which files to modify to implement roles
-- [ ] implement support for roles according to the plan
-- [ ] implement unit tests for role scenarios
-- [ ] iterate unit tests for role support until 100% pass on both previous non-role tests and new role tests
+- [x] implement support for roles according to the plan
+- [x] implement unit tests for role scenarios
+- [x] iterate unit tests for role support until 100% pass on both previous non-role tests and new role tests
 - [ ] create a test data set with 10 actions and 10 contexts for scenarios with roles
 - [ ] create a test survery with agent-target permutations using the test data set
 - [ ] use the data from test survery to test full pipeline integration test with roles and iterate integration test until 100% pass

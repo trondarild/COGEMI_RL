@@ -8,10 +8,12 @@ class SurveyResponse:
         scenario_id: str,
         response: str,
         response_time: Optional[float] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
+        role_perspective: Optional[str] = None,
     ):
         self.participant_id = participant_id
         self.scenario_id = scenario_id
         self.response = response
         self.response_time = response_time
-        self.metadata = metadata   # demographics, role, group, language
+        self.metadata = metadata       # demographics, group, language
+        self.role_perspective = role_perspective  # "agent" | "target" | "observer" | None
