@@ -213,11 +213,22 @@ __marimo__/
 .Rhistory
 *.R
 
-# Data files (download separately - not stored in repo)
-/data/
-*.csv
+# Raw / large data files (download separately - not stored in repo)
+data/NormBank.csv
+data/NormBank.xlsx
+data/output.zip
+data/SCENE_FULL_TAXONOMY.json
+data/anecdotes/
+data/dilemmas/
+data/aesop_children_19994.txt
+
+# Derived COGEMI CSVs are tracked (cogemi_*.csv, aesop_*.csv)
+# Raw survey response exports are not tracked
+data/cogemi_test_responses.csv
+data/cogemi_role_responses.csv
+
+# Other data formats (raw downloads)
 *.xlsx
-*.json
 *.zip
 
 # Scratch / output files

@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<!--
+  LOCAL TEST VERSION — COGEMI Role-Indexed Justice Survey
+  Open directly in a browser. No server or Google account needed.
+
+  Role assignment:
+    URL param ?role=agent / ?role=target / ?role=observer
+    If omitted, role is randomly assigned.
+
+  Responses saved to localStorage["cogemi_role_responses"].
+  Debug panel (bottom-right) shows each response + attention-check results.
+  Completion page has a CSV download button.
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>[LOCAL TEST] Justice Study — Role Survey</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f0f4f8; color: #222;
+      min-height: 100vh; display: flex;
+      align-items: flex-start; justify-content: center;
+      padding: 2rem 1rem;
+    }
+    .card {
+      background: #fff; border-radius: 10px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+      padding: 2rem; max-width: 660px; width: 100%;
+    }
+    h1 { font-size: 1.4rem; margin-bottom: 1rem; }
+    h2 { font-size: 1.1rem; margin-bottom: 0.75rem; color: #444; }
+    p  { line-height: 1.6; margin-bottom: 0.75rem; color: #333; }
+    .test-banner {
+      background: #fff3cd; border: 1px solid #ffc107;
+      border-radius: 6px; padding: 0.6rem 1rem;
+      font-size: 0.85rem; margin-bottom: 1rem; color: #856404;
+    }
+    .progress-bar { height: 6px; background: #e0e0e0; border-radius: 3px; margin-bottom: 1.5rem; overflow: hidden; }
+    .progress-fill { height: 100%; background: #5a7fc1; border-radius: 3px; transition: width 0.3s ease; }
+    .scenario-text {
+      font-size: 1.05rem; line-height: 1.65;
+      background: #f9f9f9;
+      border-left: 4px solid #5a7fc1;
+      padding: 1rem 1.25rem;
+      border-radius: 0 6px 6px 0;
+      margin-bottom: 1rem;
+    }
+    .role-card {
+      display: flex; align-items: center; gap: 0.6rem;
+      background: #eef2fb; border: 1px solid #c5d0ee;
+      border-radius: 8px; padding: 0.65rem 1rem;
+      font-size: 0.9rem; margin-bottom: 1rem;
+      color: #2a3d8a;
+    }
+    .role-card .role-icon { font-size: 1.2rem; }
+    .role-card strong { font-weight: 700; }
+    .question { font-weight: 600; margin-bottom: 1rem; }
+    .response-buttons { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+    .response-btn {
+      flex: 1; min-width: 100px;
+      padding: 0.75rem 1rem;
+      border: 2px solid #ccc; border-radius: 8px;
+      background: #fff; font-size: 0.95rem; cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .response-btn:hover { border-color: #5a7fc1; background: #eef2fb; }
+    .response-btn.selected { border-color: #5a7fc1; background: #5a7fc1; color: #fff; }
+    .btn-primary {
+      display: block; width: 100%;
+      padding: 0.85rem; background: #5a7fc1; color: #fff;
+      border: none; border-radius: 8px;
+      font-size: 1rem; font-weight: 600; cursor: pointer;
+      margin-top: 1.5rem; transition: background 0.15s;
+    }
+    .btn-primary:hover    { background: #4166a8; }
+    .btn-primary:disabled { background: #aaa; cursor: not-allowed; }
+    .btn-secondary {
+      display: block; width: 100%;
+      padding: 0.75rem; background: #fff; color: #5a7fc1;
+      border: 2px solid #5a7fc1; border-radius: 8px;
+      font-size: 0.95rem; font-weight: 600; cursor: pointer;
+      margin-top: 0.75rem; transition: background 0.15s;
+    }
+    .btn-secondary:hover { background: #eef2fb; }
+    label { display: block; margin-bottom: 0.4rem; font-weight: 500; }
+    input, select {
+      width: 100%; padding: 0.55rem 0.75rem;
+      border: 1px solid #ccc; border-radius: 6px;
+      font-size: 0.95rem; margin-bottom: 1rem;
+    }
+    .field-row { display: flex; gap: 1rem; }
+    .field-row > div { flex: 1; }
+    .hidden { display: none; }
+    .small  { font-size: 0.85rem; color: #666; }
+    .error  { color: #c0392b; font-size: 0.9rem; margin-top: 0.5rem; }
+    .role-badge {
+      display: inline-block;
+      background: #5a7fc1; color: #fff;
+      padding: 0.2rem 0.7rem; border-radius: 20px;
+      font-size: 0.85rem; font-weight: 600;
+      margin-bottom: 1rem;
+    }
+    #debug-panel {
+      position: fixed; bottom: 1rem; right: 1rem;
+      width: 330px; max-height: 260px;
+      background: #1e1e1e; color: #9cdcfe;
+      border-radius: 8px; padding: 0.75rem;
+      font-family: monospace; font-size: 0.78rem;
+      overflow-y: auto; z-index: 9999;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+    }
+    #debug-panel h3 { color: #569cd6; margin-bottom: 0.5rem; font-size: 0.82rem; }
+    #debug-log div  { border-bottom: 1px solid #333; padding: 0.2rem 0; }
+    .attn-pass { color: #4ec9b0; }
+    .attn-fail { color: #f44747; }
+  </style>
+</head>
+<body>
+<div class="card">
+
+  <!-- CONSENT -->
+  <div id="page-consent">
+    <div class="test-banner">⚠ LOCAL TEST MODE — responses saved to localStorage, not Google Sheets</div>
+    <h1 id="ui-consent-title"></h1>
+    <p id="ui-consent-p1"></p>
+    <p id="ui-consent-p2"></p>
+    <p id="ui-consent-p3"></p>
+    <p class="small" id="ui-consent-p4"></p>
+    <div style="margin-top:1.25rem">
+      <label><input type="checkbox" id="consent-check" style="width:auto;margin-right:0.5rem">
+        <span id="ui-consent-label"></span></label>
+    </div>
+    <div style="margin-top:1rem">
+      <label for="lang-select" id="ui-lang-label"></label>
+      <select id="lang-select" onchange="translateUI(this.value)">
+        <option value="en">English</option>
+        <option value="fr">Français</option>
+      </select>
+    </div>
+    <button class="btn-primary" id="ui-btn-consent" onclick="startDemographics()"></button>
+    <div class="error" id="err-consent"></div>
+  </div>
+
+  <!-- ROLE BRIEFING -->
+  <div id="page-role" class="hidden">
+    <h1 id="ui-role-title"></h1>
+    <p id="ui-role-intro"></p>
+    <div class="role-card">
+      <span class="role-icon" id="role-icon"></span>
+      <div>
+        <div id="ui-role-label-line"></div>
+        <div class="small" id="ui-role-desc"></div>
+      </div>
+    </div>
+    <p id="ui-role-instruction"></p>
+    <button class="btn-primary" id="ui-btn-role" onclick="show('page-demographics')"></button>
+  </div>
+
+  <!-- DEMOGRAPHICS -->
+  <div id="page-demographics" class="hidden">
+    <h1 id="ui-demo-title"></h1>
+    <p class="small" style="margin-bottom:1rem" id="ui-demo-subtitle"></p>
+    <label for="prolific-id" id="ui-label-prolific"></label>
+    <input type="text" id="prolific-id" placeholder="e.g. test_participant_01" value="test_participant_01">
+    <div class="field-row">
+      <div>
+        <label for="age" id="ui-label-age"></label>
+        <input type="number" id="age" min="18" max="99" value="30">
+      </div>
+      <div>
+        <label for="gender" id="ui-label-gender"></label>
+        <select id="gender">
+          <option value="" id="ui-gender-select"></option>
+          <option value="Woman"     id="ui-gender-woman"></option>
+          <option value="Man"       id="ui-gender-man"></option>
+          <option value="Nonbinary" id="ui-gender-nonbinary"></option>
+          <option value="Prefer"    id="ui-gender-prefer"></option>
+        </select>
+      </div>
+    </div>
+    <label for="country" id="ui-label-country"></label>
+    <input type="text" id="country" value="Norway">
+    <label for="first-language" id="ui-label-firstlang"></label>
+    <input type="text" id="first-language" value="Norwegian">
+    <button class="btn-primary" id="ui-btn-start" onclick="startSurvey()"></button>
+    <div class="error" id="err-demo"></div>
+  </div>
+
+  <!-- SURVEY -->
+  <div id="page-survey" class="hidden">
+    <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+    <h2 id="scenario-counter"></h2>
+    <div id="role-badge-survey" class="role-badge"></div>
+    <div class="scenario-text" id="scenario-text"></div>
+    <div class="role-card" id="role-context-card">
+      <span class="role-icon" id="survey-role-icon"></span>
+      <span id="survey-role-context"></span>
+    </div>
+    <p class="question" id="question-text"></p>
+    <div class="response-buttons" id="response-buttons"></div>
+    <button class="btn-primary" id="btn-next" disabled onclick="nextScenario()"></button>
+    <div class="error" id="err-survey"></div>
+  </div>
+
+  <!-- COMPLETION -->
+  <div id="page-done" class="hidden">
+    <h1 id="ui-done-title"></h1>
+    <p id="ui-done-p1">— <span id="done-count"></span> —</p>
+    <p id="ui-done-p2"></p>
+    <p class="small" id="ui-done-p3"></p>
+    <button class="btn-secondary" id="ui-btn-download" onclick="downloadCSV()"></button>
+    <button class="btn-secondary" id="ui-btn-restart"  onclick="clearAndRestart()" style="margin-top:0.5rem"></button>
+  </div>
+
+</div>
+
+<div id="debug-panel">
+  <h3>Debug — responses so far</h3>
+  <div id="debug-log"></div>
+</div>
+
+<script>
+// =============================================================================
+// Scenario data (mirrors role_survey.gs and test_role_dataset.py)
+// =============================================================================
+var SCENARIOS = [
+  {id:"rj_exploit_commission",   en:"An employer takes all sales commission earned by their employee.",               fr:"Un employeur conserve toutes les commissions sur les ventes réalisées par son employé.",              agent_role:"employer",    target_role:"salesperson"},
+  {id:"rj_exploit_intern",       en:"A company uses unpaid interns for months of skilled work.",                      fr:"Une entreprise utilise des stagiaires non rémunérés pendant des mois de travail qualifié.",           agent_role:"company",     target_role:"intern"},
+  {id:"rj_exploit_franchise",    en:"A franchisor charges fees so high the franchisee cannot turn a profit.",         fr:"Un franchiseur impose des redevances si élevées que le franchisé ne peut réaliser aucun bénéfice.",   agent_role:"franchisor",  target_role:"franchisee"},
+  {id:"rj_exploit_gig",          en:"A platform takes 40% of every payment earned by its gig workers.",              fr:"Une plateforme prélève 40 % de chaque paiement gagné par ses travailleurs indépendants.",            agent_role:"platform",    target_role:"gig worker"},
+  {id:"rj_exploit_ideas",        en:"A manager presents a subordinate's idea as their own to senior leadership.",    fr:"Un manager présente l'idée d'un subordonné comme la sienne à la direction.",                         agent_role:"manager",     target_role:"subordinate"},
+  {id:"rj_exploit_overtime",     en:"A supervisor requires unpaid overtime without informing staff in advance.",      fr:"Un superviseur impose des heures supplémentaires non rémunérées sans en informer le personnel.",      agent_role:"supervisor",  target_role:"employee"},
+  {id:"rj_exploit_subcontract",  en:"A contractor subcontracts work to labourers at a fraction of the billed rate.", fr:"Un entrepreneur sous-traite le travail à des ouvriers à une fraction du tarif facturé.",              agent_role:"contractor",  target_role:"labourer"},
+  {id:"rj_exploit_tips",         en:"A restaurant owner keeps all tips collected by waiting staff.",                  fr:"Un propriétaire de restaurant garde tous les pourboires collectés par le personnel de salle.",        agent_role:"owner",       target_role:"server"},
+  {id:"rj_exploit_copyright",    en:"A record label takes full copyright of an artist's recordings by default.",     fr:"Une maison de disques prend par défaut tous les droits d'auteur sur les enregistrements d'un artiste.",agent_role:"record label",target_role:"artist"},
+  {id:"rj_exploit_bonus",        en:"A CEO cancels the performance bonuses of staff after they meet all targets.",   fr:"Un PDG annule les primes de performance du personnel après que celui-ci a atteint tous ses objectifs.", agent_role:"CEO",         target_role:"employee"},
+  {id:"rj_deceive_investor",     en:"An entrepreneur overstates company revenue to secure investment.",               fr:"Un entrepreneur surestime le chiffre d'affaires de l'entreprise pour obtenir un investissement.",      agent_role:"entrepreneur",target_role:"investor"},
+  {id:"rj_deceive_patient",      en:"A doctor withholds a terminal diagnosis to avoid difficult conversations.",      fr:"Un médecin dissimule un diagnostic terminal pour éviter des conversations difficiles.",               agent_role:"doctor",      target_role:"patient"},
+  {id:"rj_deceive_voter",        en:"A politician makes promises they have no intention of keeping.",                 fr:"Un politicien fait des promesses qu'il n'a pas l'intention de tenir.",                              agent_role:"politician",  target_role:"voter"},
+  {id:"rj_deceive_customer",     en:"A salesperson hides known defects when selling a used car.",                    fr:"Un vendeur cache des défauts connus lors de la vente d'une voiture d'occasion.",                    agent_role:"salesperson", target_role:"customer"},
+  {id:"rj_deceive_student",      en:"A teacher tells a struggling student they are progressing well to avoid conflict.", fr:"Un enseignant dit à un élève en difficulté qu'il progresse bien pour éviter les conflits.",       agent_role:"teacher",     target_role:"student"},
+  {id:"rj_deceive_spouse",       en:"A partner hides significant debt from their spouse during financial planning.",  fr:"Un partenaire cache des dettes importantes à son conjoint lors d'une planification financière.",      agent_role:"partner",     target_role:"spouse"},
+  {id:"rj_deceive_tenant",       en:"A landlord misrepresents the state of the property to secure a rental.",        fr:"Un propriétaire présente de manière inexacte l'état du bien pour obtenir une location.",             agent_role:"landlord",    target_role:"tenant"},
+  {id:"rj_deceive_recruit",      en:"A recruiter exaggerates a job's salary and conditions to fill a vacancy.",      fr:"Un recruteur exagère le salaire et les conditions d'un poste pour pourvoir une vacance.",            agent_role:"recruiter",   target_role:"candidate"},
+  {id:"rj_deceive_client",       en:"A lawyer conceals a conflict of interest while representing a client.",         fr:"Un avocat dissimule un conflit d'intérêts tout en représentant un client.",                          agent_role:"lawyer",      target_role:"client"},
+  {id:"rj_deceive_public",       en:"A company hides environmental damage data from regulators and the public.",     fr:"Une entreprise cache des données sur des dommages environnementaux aux régulateurs et au public.",    agent_role:"company",     target_role:"public"},
+  {id:"rj_coerce_worker",        en:"A factory owner threatens workers with dismissal if they unionise.",             fr:"Un propriétaire d'usine menace les travailleurs de licenciement s'ils se syndicalisent.",            agent_role:"owner",       target_role:"worker"},
+  {id:"rj_coerce_debtor",        en:"A lender uses harassment and threats to collect a debt.",                       fr:"Un prêteur utilise le harcèlement et les menaces pour recouvrer une dette.",                        agent_role:"lender",      target_role:"debtor"},
+  {id:"rj_coerce_witness",       en:"A defendant pressures a witness to change their testimony.",                    fr:"Un prévenu fait pression sur un témoin pour qu'il modifie sa déposition.",                          agent_role:"defendant",   target_role:"witness"},
+  {id:"rj_coerce_employee",      en:"A manager pressures an employee to sign a non-compete under threat of firing.", fr:"Un manager pousse un employé à signer une clause de non-concurrence sous peine de licenciement.",     agent_role:"manager",     target_role:"employee"},
+  {id:"rj_coerce_tenant",        en:"A landlord threatens eviction to force a tenant to accept worse conditions.",   fr:"Un propriétaire menace d'expulsion pour forcer un locataire à accepter de pires conditions.",         agent_role:"landlord",    target_role:"tenant"},
+  {id:"rj_coerce_student",       en:"A professor withholds a grade to pressure a student into extra unpaid work.",   fr:"Un professeur retient une note pour obliger un étudiant à effectuer des travaux supplémentaires non rémunérés.", agent_role:"professor", target_role:"student"},
+  {id:"rj_coerce_patient",       en:"A caregiver uses emotional manipulation to control an elderly patient.",        fr:"Un soignant utilise la manipulation émotionnelle pour contrôler un patient âgé.",                    agent_role:"caregiver",   target_role:"patient"},
+  {id:"rj_coerce_partner",       en:"A person uses financial control to prevent their partner from leaving.",        fr:"Une personne utilise le contrôle financier pour empêcher son partenaire de partir.",                 agent_role:"controller",  target_role:"partner"},
+  {id:"rj_coerce_supplier",      en:"A retailer demands suppliers cut prices or lose the contract.",                 fr:"Un détaillant exige que les fournisseurs baissent leurs prix ou perdent le contrat.",                agent_role:"retailer",    target_role:"supplier"},
+  {id:"rj_coerce_citizen",       en:"A government uses surveillance to deter citizens from political dissent.",      fr:"Un gouvernement utilise la surveillance pour décourager les citoyens de toute dissidence politique.", agent_role:"government",  target_role:"citizen"},
+  {id:"rj_discriminate_hire",    en:"An employer rejects a candidate solely because of their ethnic background.",    fr:"Un employeur rejette un candidat uniquement en raison de son origine ethnique.",                     agent_role:"employer",    target_role:"candidate"},
+  {id:"rj_discriminate_promote", en:"A manager overlooks a qualified woman for promotion in favour of a less experienced man.", fr:"Un manager écarte une femme qualifiée pour une promotion au profit d'un homme moins expérimenté.", agent_role:"manager", target_role:"employee"},
+  {id:"rj_discriminate_serve",   en:"A shop owner refuses to serve a customer because of their religion.",           fr:"Un commerçant refuse de servir un client en raison de sa religion.",                                  agent_role:"shopkeeper",  target_role:"customer"},
+  {id:"rj_discriminate_seat",    en:"A restaurant seats guests of a certain race in a hidden corner.",               fr:"Un restaurant place des clients d'une certaine origine dans un coin isolé.",                         agent_role:"manager",     target_role:"guest"},
+  {id:"rj_discriminate_lend",    en:"A bank charges higher interest rates to applicants from a specific postcode.",  fr:"Une banque applique des taux d'intérêt plus élevés aux demandeurs d'un code postal spécifique.",     agent_role:"bank",        target_role:"applicant"},
+  {id:"rj_discriminate_insure",  en:"An insurer charges higher premiums based on the applicant's nationality.",     fr:"Un assureur facture des primes plus élevées en fonction de la nationalité du demandeur.",             agent_role:"insurer",     target_role:"applicant"},
+  {id:"rj_discriminate_rent",    en:"A landlord refuses to rent to a family with young children.",                   fr:"Un propriétaire refuse de louer à une famille avec de jeunes enfants.",                              agent_role:"landlord",    target_role:"family"},
+  {id:"rj_discriminate_admit",   en:"A university lowers admission standards for legacy applicants only.",           fr:"Une université abaisse ses critères d'admission uniquement pour les candidats issus de familles d'anciens élèves.", agent_role:"university", target_role:"applicant"},
+  {id:"rj_discriminate_pay",     en:"An employer pays workers of one gender less for identical work.",               fr:"Un employeur paie les travailleurs d'un genre moins que les autres pour un travail identique.",       agent_role:"employer",    target_role:"employee"},
+  {id:"rj_discriminate_assign",  en:"A teacher assigns the least desirable tasks to students from minority groups.", fr:"Un enseignant confie les tâches les moins valorisantes aux élèves issus de groupes minoritaires.",    agent_role:"teacher",     target_role:"student"},
+  {id:"rj_discipline_child",     en:"A parent grounds a teenager for coming home an hour late.",                     fr:"Un parent prive un adolescent de sortie pour être rentré une heure en retard.",                       agent_role:"parent",      target_role:"teenager"},
+  {id:"rj_discipline_employee",  en:"A manager gives a written warning to a consistently late employee.",            fr:"Un manager donne un avertissement écrit à un employé régulièrement en retard.",                      agent_role:"manager",     target_role:"employee"},
+  {id:"rj_discipline_student",   en:"A teacher detains a student for disrupting the class repeatedly.",              fr:"Un enseignant retient un élève pour avoir perturbé la classe à plusieurs reprises.",                 agent_role:"teacher",     target_role:"student"},
+  {id:"rj_discipline_player",    en:"A coach drops a player from the team after they skip training without notice.", fr:"Un entraîneur exclut un joueur de l'équipe après qu'il a manqué un entraînement sans préavis.",       agent_role:"coach",       target_role:"player"},
+  {id:"rj_discipline_soldier",   en:"An officer reprimands a soldier for failing to follow protocol.",               fr:"Un officier réprimande un soldat pour ne pas avoir suivi le protocole.",                            agent_role:"officer",     target_role:"soldier"},
+  {id:"rj_discipline_prisoner",  en:"A prison governor extends a prisoner's sentence for breaking facility rules.",  fr:"Un directeur de prison prolonge la peine d'un détenu pour infraction au règlement.",                agent_role:"governor",    target_role:"prisoner"},
+  {id:"rj_discipline_trainee",   en:"A supervisor fails a trainee who did not meet the required standard.",          fr:"Un superviseur recale un stagiaire qui n'a pas atteint le niveau requis.",                           agent_role:"supervisor",  target_role:"trainee"},
+  {id:"rj_discipline_member",    en:"A committee suspends a member who violated the code of conduct.",               fr:"Un comité suspend un membre qui a violé le code de conduite.",                                       agent_role:"committee",   target_role:"member"},
+  {id:"rj_discipline_intern",    en:"A firm terminates an intern found sharing confidential documents externally.",  fr:"Une entreprise met fin au contrat d'un stagiaire surpris à partager des documents confidentiels.",    agent_role:"firm",        target_role:"intern"},
+  {id:"rj_discipline_subordinate",en:"A manager publicly criticises a subordinate's work in a team meeting.",       fr:"Un manager critique publiquement le travail d'un subordonné lors d'une réunion d'équipe.",            agent_role:"manager",     target_role:"subordinate"},
+  {id:"rj_compete_market",       en:"A supermarket chain opens a store next to a small independent grocer.",         fr:"Une chaîne de supermarchés ouvre un magasin à côté d'un épicier indépendant.",                       agent_role:"chain",       target_role:"grocer"},
+  {id:"rj_compete_election",     en:"A candidate runs a negative campaign targeting their opponent's record.",       fr:"Un candidat mène une campagne négative ciblant le bilan de son adversaire.",                         agent_role:"candidate",   target_role:"opponent"},
+  {id:"rj_compete_promotion",    en:"A colleague lobbies management intensively to be selected over a peer.",        fr:"Un collègue fait pression intensément auprès de la direction pour être sélectionné plutôt qu'un pair.", agent_role:"colleague",  target_role:"peer"},
+  {id:"rj_compete_scholarship",  en:"A student applies for the same competitive scholarship as their close friend.", fr:"Un étudiant postule à la même bourse compétitive que son ami proche.",                               agent_role:"student",     target_role:"friend"},
+  {id:"rj_compete_contract",     en:"A firm undercuts a rival's bid to win a government contract.",                  fr:"Une entreprise propose un prix inférieur à celui d'un concurrent pour remporter un contrat public.",  agent_role:"firm",        target_role:"rival"},
+  {id:"rj_compete_grant",        en:"A researcher submits to the same funding call as a former collaborator.",       fr:"Un chercheur soumet une candidature au même appel à financement qu'un ancien collaborateur.",          agent_role:"researcher",  target_role:"collaborator"},
+  {id:"rj_compete_award",        en:"An artist submits to a prize knowing their mentor is also competing.",          fr:"Un artiste soumet à un prix en sachant que son mentor concourt également.",                          agent_role:"artist",      target_role:"mentor"},
+  {id:"rj_compete_position",     en:"A job applicant negotiates salary well above the advertised range.",            fr:"Un candidat à un emploi négocie un salaire bien supérieur à la fourchette annoncée.",                agent_role:"applicant",   target_role:"employer"},
+  {id:"rj_compete_tender",       en:"A developer uses inside knowledge to outbid competitors on a project.",         fr:"Un développeur utilise des informations internes pour surenchérir sur ses concurrents.",              agent_role:"developer",   target_role:"competitor"},
+  {id:"rj_compete_prize",        en:"A sports team uses all legal tactics to prevent opponents from scoring.",       fr:"Une équipe sportive utilise toutes les tactiques légales pour empêcher ses adversaires de marquer.",  agent_role:"team",        target_role:"opponent"},
+  {id:"rj_protect_stranger",     en:"A bystander steps in when they see a stranger being harassed on the street.",  fr:"Un passant intervient en voyant un inconnu harcelé dans la rue.",                                    agent_role:"bystander",   target_role:"stranger"},
+  {id:"rj_protect_relative",     en:"A parent moves their child away from an abusive grandparent.",                 fr:"Un parent éloigne son enfant d'un grand-parent maltraitant.",                                        agent_role:"parent",      target_role:"child"},
+  {id:"rj_protect_bully",        en:"A teacher intervenes when a student is being bullied in the playground.",      fr:"Un enseignant intervient lorsqu'un élève est victime d'intimidation dans la cour de récréation.",    agent_role:"teacher",     target_role:"student"},
+  {id:"rj_protect_harassment",   en:"An employer disciplines a manager found harassing a junior colleague.",        fr:"Un employeur sanctionne un manager surpris à harceler un collègue junior.",                          agent_role:"employer",    target_role:"employee"},
+  {id:"rj_protect_fraud",        en:"A bank flags and reverses an unauthorised transaction on a customer's account.", fr:"Une banque signale et annule une transaction non autorisée sur le compte d'un client.",            agent_role:"bank",        target_role:"customer"},
+  {id:"rj_protect_medical",      en:"A paramedic performs emergency first aid on an unconscious pedestrian.",       fr:"Un ambulancier pratique les premiers secours d'urgence sur un piéton inconscient.",                  agent_role:"paramedic",   target_role:"patient"},
+  {id:"rj_protect_disaster",     en:"A rescue worker carries an injured person to safety during a flood.",          fr:"Un secouriste transporte une personne blessée en lieu sûr lors d'une inondation.",                   agent_role:"rescue worker",target_role:"survivor"},
+  {id:"rj_protect_attack",       en:"A security guard physically defends a customer being attacked in a shop.",     fr:"Un agent de sécurité défend physiquement un client agressé dans un magasin.",                       agent_role:"guard",       target_role:"customer"},
+  {id:"rj_protect_legal",        en:"A lawyer takes on a pro-bono case to protect a vulnerable person's rights.",  fr:"Un avocat prend en charge pro bono un dossier pour défendre les droits d'une personne vulnérable.",  agent_role:"lawyer",      target_role:"client"},
+  {id:"rj_protect_domestic",     en:"A social worker removes a child from a home with documented abuse.",           fr:"Un travailleur social retire un enfant d'un foyer où des maltraitances ont été documentées.",         agent_role:"social worker",target_role:"child"},
+  {id:"rj_compensate_overtime",  en:"An employer pays time-and-a-half for every overtime hour worked.",             fr:"Un employeur paie une heure et demie pour chaque heure supplémentaire effectuée.",                   agent_role:"employer",    target_role:"employee"},
+  {id:"rj_compensate_danger",    en:"A company provides hazard pay to workers in high-risk environments.",          fr:"Une entreprise verse une prime de risque aux travailleurs exposés à des environnements dangereux.",   agent_role:"company",     target_role:"worker"},
+  {id:"rj_compensate_achievement",en:"A manager awards a significant bonus to a team that exceeded targets.",       fr:"Un manager attribue une prime importante à une équipe ayant dépassé ses objectifs.",                 agent_role:"manager",     target_role:"team"},
+  {id:"rj_compensate_loss",      en:"An insurance company pays full market value for a stolen vehicle.",            fr:"Une compagnie d'assurance rembourse la valeur marchande complète d'un véhicule volé.",               agent_role:"insurer",     target_role:"claimant"},
+  {id:"rj_compensate_delay",     en:"An airline offers vouchers and hotel accommodation for a 12-hour delay.",      fr:"Une compagnie aérienne offre des bons et un hébergement hôtelier pour un retard de 12 heures.",      agent_role:"airline",     target_role:"passenger"},
+  {id:"rj_compensate_effort",    en:"A client pays a freelancer extra for exceptional work delivered early.",       fr:"Un client paie un supplément à un freelance pour un travail exceptionnel livré en avance.",           agent_role:"client",      target_role:"freelancer"},
+  {id:"rj_compensate_skill",     en:"A firm raises salaries to match market rates after a benchmarking exercise.",  fr:"Une entreprise revalorise les salaires pour les aligner sur les tarifs du marché après une étude comparative.", agent_role:"firm", target_role:"employee"},
+  {id:"rj_compensate_loyalty",   en:"A company gives long-serving employees additional annual leave.",              fr:"Une entreprise accorde des congés supplémentaires aux employés de longue date.",                     agent_role:"company",     target_role:"employee"},
+  {id:"rj_compensate_innovation",en:"An organisation pays royalties to an inventor for use of their patent.",      fr:"Une organisation verse des redevances à un inventeur pour l'utilisation de son brevet.",             agent_role:"organisation",target_role:"inventor"},
+  {id:"rj_compensate_sacrifice", en:"A government compensates families who lost members in a military conflict.",   fr:"Un gouvernement indemnise les familles ayant perdu des membres dans un conflit militaire.",            agent_role:"government",  target_role:"family"},
+  {id:"rj_advocate_rights",      en:"A lawyer publicly argues for the legal rights of a marginalised group.",       fr:"Un avocat plaide publiquement pour les droits d'un groupe marginalisé.",                             agent_role:"lawyer",      target_role:"community"},
+  {id:"rj_advocate_raise",       en:"A manager argues to senior leadership that their team deserves a pay raise.",  fr:"Un manager argumente auprès de la direction que son équipe mérite une augmentation de salaire.",      agent_role:"manager",     target_role:"team"},
+  {id:"rj_advocate_promotion",   en:"A supervisor recommends a colleague for promotion based on merit.",            fr:"Un superviseur recommande un collègue pour une promotion sur la base du mérite.",                    agent_role:"supervisor",  target_role:"colleague"},
+  {id:"rj_advocate_asylum",      en:"A caseworker supports a refugee's asylum application with detailed evidence.", fr:"Un travailleur social soutient la demande d'asile d'un réfugié avec des preuves détaillées.",          agent_role:"caseworker",  target_role:"refugee"},
+  {id:"rj_advocate_release",     en:"A parole board member argues for early release of a rehabilitated prisoner.",  fr:"Un membre d'une commission plaide pour la remise en liberté anticipée d'un détenu réhabilité.",       agent_role:"board member",target_role:"prisoner"},
+  {id:"rj_advocate_treatment",   en:"A nurse pushes back when a doctor dismisses a patient's reported symptoms.",  fr:"Un infirmier conteste la décision d'un médecin qui minimise les symptômes d'un patient.",             agent_role:"nurse",       target_role:"patient"},
+  {id:"rj_advocate_safety",      en:"A union representative raises health and safety concerns on behalf of staff.", fr:"Un délégué syndical soulève des préoccupations de santé et sécurité au nom du personnel.",           agent_role:"rep",         target_role:"workers"},
+  {id:"rj_advocate_recognition", en:"A professor credits a research assistant as co-author on a published paper.",  fr:"Un professeur crédite un assistant de recherche comme co-auteur d'un article publié.",               agent_role:"professor",   target_role:"researcher"},
+  {id:"rj_advocate_appeal",      en:"A lawyer files an appeal to overturn a wrongful conviction.",                  fr:"Un avocat dépose un recours pour faire annuler une condamnation injuste.",                           agent_role:"lawyer",      target_role:"client"},
+  {id:"rj_advocate_parole",      en:"A social worker prepares a case for a juvenile offender's early release.",    fr:"Un travailleur social prépare un dossier pour la libération anticipée d'un jeune délinquant.",        agent_role:"social worker",target_role:"juvenile"},
+  {id:"rj_assist_groceries",     en:"A neighbour carries heavy shopping bags upstairs for an elderly resident.",    fr:"Un voisin monte les sacs de courses lourds pour un résident âgé.",                                   agent_role:"neighbour",   target_role:"resident"},
+  {id:"rj_assist_directions",    en:"A local gives detailed directions to a lost tourist.",                         fr:"Un habitant donne des indications détaillées à un touriste perdu.",                                  agent_role:"local",       target_role:"tourist"},
+  {id:"rj_assist_stranded",      en:"A driver stops to help a motorist whose car has broken down on a motorway.",  fr:"Un conducteur s'arrête pour aider un automobiliste en panne sur l'autoroute.",                       agent_role:"driver",      target_role:"motorist"},
+  {id:"rj_assist_flooded",       en:"A volunteer sandbags a stranger's home during a flood emergency.",             fr:"Un bénévole met en place des sacs de sable autour de la maison d'un inconnu lors d'une inondation.",  agent_role:"volunteer",   target_role:"homeowner"},
+  {id:"rj_assist_injured",       en:"A passer-by calls an ambulance and waits with an injured cyclist.",            fr:"Un passant appelle une ambulance et reste auprès d'un cycliste blessé.",                            agent_role:"passer-by",   target_role:"cyclist"},
+  {id:"rj_assist_lost",          en:"A ranger guides a hiker who has strayed off-trail back to safety.",            fr:"Un garde forestier guide un randonneur qui a quitté le sentier balisé jusqu'à la sécurité.",         agent_role:"ranger",      target_role:"hiker"},
+  {id:"rj_assist_hungry",        en:"A charity worker distributes meals to people without homes.",                  fr:"Un travailleur associatif distribue des repas à des personnes sans abri.",                           agent_role:"charity worker",target_role:"recipient"},
+  {id:"rj_assist_homeless",      en:"A citizen helps a rough sleeper find emergency shelter on a cold night.",      fr:"Un citoyen aide une personne à la rue à trouver un hébergement d'urgence par une nuit froide.",       agent_role:"citizen",     target_role:"rough sleeper"},
+  {id:"rj_assist_disabled",      en:"A commuter gives up their seat for a passenger with a visible disability.",   fr:"Un voyageur cède sa place à un passager ayant un handicap visible.",                                 agent_role:"commuter",    target_role:"passenger"},
+  {id:"rj_assist_elderly",       en:"A pharmacist helps an elderly customer understand their medication regimen.",  fr:"Un pharmacien aide un client âgé à comprendre son traitement médicamenteux.",                        agent_role:"pharmacist",  target_role:"patient"}
+];
+
+var ATTENTION_CHECKS = [
+  {id:"rj_check_just",   en:"A rescue worker carries an injured child to safety after a building collapse.", fr:"Un secouriste transporte un enfant blessé en lieu sûr après l'effondrement d'un bâtiment.", agent_role:"rescue worker", target_role:"child",    expected:"Just"},
+  {id:"rj_check_unjust", en:"A prison guard beats an unarmed prisoner without cause.",                      fr:"Un gardien de prison frappe sans raison un détenu non armé.",                             agent_role:"guard",         target_role:"prisoner", expected:"Unjust"}
+];
+
+// =============================================================================
+// UI translations
+// =============================================================================
+var ROLE_ICONS   = { agent: "🎯", target: "🙋", observer: "👁" };
+var ROLE_LABELS  = { en: { agent: "Agent", target: "Target", observer: "Observer" },
+                     fr: { agent: "Agent", target: "Cible",  observer: "Observateur" } };
+
+var RESPONSE_LABELS = {
+  en: ["Unjust", "Neutral", "Just"],
+  fr: ["Injuste", "Neutre", "Juste"]
+};
+var RESPONSE_VALUES = ["Unjust", "Neutral", "Just"];
+
+var ROLE_QUESTIONS = {
+  agent: {
+    en: "You are the {role}. How just is what you are doing?",
+    fr: "Vous êtes {role}. Dans quelle mesure ce que vous faites est-il juste ?"
+  },
+  target: {
+    en: "You are the {role}. How just is what is being done to you?",
+    fr: "Vous êtes {role}. Dans quelle mesure ce qui vous est fait est-il juste ?"
+  },
+  observer: {
+    en: "You are an observer. How just is the {agent}'s action toward the {target}?",
+    fr: "Vous êtes un observateur. Dans quelle mesure l'action de {agent} envers {target} est-elle juste ?"
+  }
+};
+
+var ROLE_CONTEXT_LINES = {
+  agent:    { en: "In this scenario, you are the <strong>{role}</strong>.",                           fr: "Dans ce scénario, vous êtes <strong>{role}</strong>." },
+  target:   { en: "In this scenario, you are the <strong>{role}</strong>.",                           fr: "Dans ce scénario, vous êtes <strong>{role}</strong>." },
+  observer: { en: "You are an <strong>observer</strong> watching this situation unfold.",              fr: "Vous êtes un <strong>observateur</strong> qui regarde la situation se dérouler." }
+};
+
+var ROLE_DESCS = {
+  agent:    { en: "The person performing the action",    fr: "La personne qui effectue l'action" },
+  target:   { en: "The person the action is directed at",fr: "La personne à qui l'action est destinée" },
+  observer: { en: "A neutral third party",               fr: "Un tiers neutre" }
+};
+
+var ROLE_BRIEFING = {
+  agent: {
+    en: "You will read 20 short scenarios. In each one, <strong>you are the agent</strong> — the person performing the action. You will be asked how just your own action is.",
+    fr: "Vous lirez 20 courtes situations. Dans chacune, <strong>vous êtes l'agent</strong> — la personne qui effectue l'action. Il vous sera demandé dans quelle mesure votre propre action est juste."
+  },
+  target: {
+    en: "You will read 20 short scenarios. In each one, <strong>you are the target</strong> — the person the action is directed at. You will be asked how just the action done to you is.",
+    fr: "Vous lirez 20 courtes situations. Dans chacune, <strong>vous êtes la cible</strong> — la personne à qui l'action est destinée. Il vous sera demandé dans quelle mesure l'action qui vous est faite est juste."
+  },
+  observer: {
+    en: "You will read 20 short scenarios. In each one, <strong>you are an observer</strong> — a neutral third party watching the situation. You will be asked how just the agent's action is.",
+    fr: "Vous lirez 20 courtes situations. Dans chacune, <strong>vous êtes un observateur</strong> — un tiers neutre qui observe la situation. Il vous sera demandé dans quelle mesure l'action de l'agent est juste."
+  }
+};
+
+var SITUATION_LABEL = { en: ["Situation", "of"], fr: ["Situation", "sur"] };
+
+var UI_TEXT = {
+  en: {
+    "consent-title":    "Justice Study",
+    "consent-p1":       "Thank you for taking part. This study investigates how people judge the justice of actions from different participant perspectives.",
+    "consent-p2":       "You will read <strong>20 short scenarios</strong> and rate how just the described action is on a 3-point scale. The study takes approximately <strong>8 minutes</strong>.",
+    "consent-p3":       "<strong>Your data:</strong> Responses are stored securely and linked only to your Prolific ID, removed after payment. Participation is voluntary.",
+    "consent-p4":       "This research is conducted by [Institution]. Contact [email] with questions.",
+    "consent-label":    "I have read the above and consent to participate.",
+    "lang-label":       "Preferred language",
+    "btn-consent":      "Continue",
+    "role-title":       "Your role in this study",
+    "btn-role":         "Continue to demographics",
+    "demo-title":       "About you",
+    "demo-subtitle":    "All fields are required.",
+    "label-prolific":   "Prolific ID (use any string for testing)",
+    "label-age":        "Age",
+    "label-gender":     "Gender",
+    "gender-select":    "-- select --",
+    "gender-woman":     "Woman",
+    "gender-man":       "Man",
+    "gender-nonbinary": "Non-binary / third gender",
+    "gender-prefer":    "Prefer not to say",
+    "label-country":    "Country of origin",
+    "label-firstlang":  "First language",
+    "btn-start":        "Start survey",
+    "btn-next":         "Next",
+    "done-title":       "Thank you!",
+    "done-p1-pre":      "You have completed all",
+    "done-p1-post":     "scenarios.",
+    "done-p2":          "In the real study, return to Prolific with completion code: <strong>COGEMI2025</strong>",
+    "done-p3":          "In this test, responses were saved to <code>localStorage[\"cogemi_role_responses\"]</code>.",
+    "btn-download":     "Download responses (CSV)",
+    "btn-restart":      "Restart test"
+  },
+  fr: {
+    "consent-title":    "Étude sur la justice",
+    "consent-p1":       "Merci de participer. Cette étude examine comment les gens jugent la justice des actions selon différentes perspectives.",
+    "consent-p2":       "Vous lirez <strong>20 courtes situations</strong> et évaluerez la justice de l'action sur une échelle à 3 points. L'étude dure environ <strong>8 minutes</strong>.",
+    "consent-p3":       "<strong>Vos données :</strong> Les réponses sont stockées de manière sécurisée et associées à votre identifiant Prolific, supprimé après le paiement. Participation volontaire.",
+    "consent-p4":       "Recherche menée par [Institution]. Questions : [email].",
+    "consent-label":    "J'ai lu les informations ci-dessus et je consens à participer.",
+    "lang-label":       "Langue préférée",
+    "btn-consent":      "Continuer",
+    "role-title":       "Votre rôle dans cette étude",
+    "btn-role":         "Continuer vers les informations personnelles",
+    "demo-title":       "À propos de vous",
+    "demo-subtitle":    "Tous les champs sont obligatoires.",
+    "label-prolific":   "Identifiant Prolific (entrez n'importe quelle chaîne pour le test)",
+    "label-age":        "Âge",
+    "label-gender":     "Genre",
+    "gender-select":    "-- sélectionner --",
+    "gender-woman":     "Femme",
+    "gender-man":       "Homme",
+    "gender-nonbinary": "Non-binaire / troisième genre",
+    "gender-prefer":    "Préfère ne pas répondre",
+    "label-country":    "Pays d'origine",
+    "label-firstlang":  "Langue maternelle",
+    "btn-start":        "Commencer l'enquête",
+    "btn-next":         "Suivant",
+    "done-title":       "Merci !",
+    "done-p1-pre":      "Vous avez complété les",
+    "done-p1-post":     "situations.",
+    "done-p2":          "Dans la vraie étude, retournez sur Prolific avec le code : <strong>COGEMI2025</strong>",
+    "done-p3":          "Dans ce test, les réponses ont été enregistrées dans <code>localStorage[\"cogemi_role_responses\"]</code>.",
+    "btn-download":     "Télécharger les réponses (CSV)",
+    "btn-restart":      "Recommencer le test"
+  }
+};
+
+var ERR_CONSENT = { en: "Please tick the consent box to continue.", fr: "Veuillez cocher la case de consentement." };
+var ERR_DEMO    = { en: "Please fill in all fields.", fr: "Veuillez remplir tous les champs." };
+
+function translateUI(lang) {
+  var t = UI_TEXT[lang] || UI_TEXT.en;
+  var map = [
+    ["ui-consent-title","consent-title","innerHTML"],["ui-consent-p1","consent-p1","innerHTML"],
+    ["ui-consent-p2","consent-p2","innerHTML"],      ["ui-consent-p3","consent-p3","innerHTML"],
+    ["ui-consent-p4","consent-p4","textContent"],    ["ui-consent-label","consent-label","textContent"],
+    ["ui-lang-label","lang-label","textContent"],    ["ui-btn-consent","btn-consent","textContent"],
+    ["ui-role-title","role-title","textContent"],    ["ui-btn-role","btn-role","textContent"],
+    ["ui-demo-title","demo-title","textContent"],    ["ui-demo-subtitle","demo-subtitle","textContent"],
+    ["ui-label-prolific","label-prolific","textContent"],["ui-label-age","label-age","textContent"],
+    ["ui-label-gender","label-gender","textContent"],["ui-gender-select","gender-select","textContent"],
+    ["ui-gender-woman","gender-woman","textContent"],["ui-gender-man","gender-man","textContent"],
+    ["ui-gender-nonbinary","gender-nonbinary","textContent"],["ui-gender-prefer","gender-prefer","textContent"],
+    ["ui-label-country","label-country","textContent"],["ui-label-firstlang","label-firstlang","textContent"],
+    ["ui-btn-start","btn-start","textContent"],      ["btn-next","btn-next","textContent"],
+    ["ui-done-title","done-title","textContent"],    ["ui-done-p2","done-p2","innerHTML"],
+    ["ui-done-p3","done-p3","innerHTML"],            ["ui-btn-download","btn-download","textContent"],
+    ["ui-btn-restart","btn-restart","textContent"]
+  ];
+  map.forEach(function(r) { var e = document.getElementById(r[0]); if (e) e[r[2]] = t[r[1]]; });
+  var p1 = document.getElementById("ui-done-p1");
+  if (p1) {
+    var n = (document.getElementById("done-count") || {}).textContent || "";
+    p1.innerHTML = t["done-p1-pre"] + ' <span id="done-count">' + n + '</span> ' + t["done-p1-post"];
+  }
+  // Update role briefing if role is already set (guard: state may not yet exist on first call)
+  if (typeof state !== 'undefined' && state && state.role) updateRoleBriefing(lang);
+}
+translateUI("en");
+
+// =============================================================================
+// State
+// =============================================================================
+var state = {
+  lang: "en", role: null,
+  prolificId: "", age: "", gender: "", country: "", firstLang: "",
+  scenarios: [], current: 0, selected: null, labels: []
+};
+
+// Detect role from URL param
+(function() {
+  var m = window.location.search.match(/[?&]role=(agent|target|observer)/);
+  if (m) state.role = m[1];
+})();
+
+// =============================================================================
+// Mock google.script.run
+// =============================================================================
+var google = {
+  script: {
+    run: {
+      _s: null, _f: null,
+      withSuccessHandler: function(fn) { this._s = fn; return this; },
+      withFailureHandler: function(fn) { this._f = fn; return this; },
+      getScenariosForSession: function(role, lang) {
+        var self = this;
+        setTimeout(function() { self._s && self._s(mockGetScenarios()); }, 50);
+      },
+      getResponseLabels: function(lang) {
+        var self = this;
+        setTimeout(function() {
+          var labels = RESPONSE_LABELS[lang] || RESPONSE_LABELS.en;
+          var result = RESPONSE_VALUES.map(function(v,i) { return {value:v, label:labels[i]}; });
+          self._s && self._s(result);
+        }, 30);
+      },
+      submitResponse: function(pid, sid, resp, role, agentRole, targetRole, age, gender, country, lang) {
+        var self = this;
+        setTimeout(function() {
+          mockSubmit(pid, sid, resp, role, agentRole, targetRole, age, gender, country, lang);
+          self._s && self._s({ok: true});
+        }, 30);
+      }
+    }
+  }
+};
+
+function mockGetScenarios() {
+  var pool = SCENARIOS.slice();
+  for (var i = pool.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp;
+  }
+  pool = pool.slice(0, 20);
+  pool.splice(5,  0, ATTENTION_CHECKS[0]);
+  pool.splice(14, 0, ATTENTION_CHECKS[1]);
+  return pool;
+}
+
+function mockSubmit(pid, sid, resp, role, agentRole, targetRole, age, gender, country, lang) {
+  var stored = JSON.parse(localStorage.getItem("cogemi_role_responses") || "[]");
+  stored.push({ timestamp: new Date().toISOString(), prolific_id: pid,
+    scenario_id: sid, response: resp, role_perspective: role,
+    agent_role: agentRole, target_role: targetRole,
+    age: age, gender: gender, country: country, language: lang });
+  localStorage.setItem("cogemi_role_responses", JSON.stringify(stored));
+  debugLog(sid, resp, role);
+}
+
+// =============================================================================
+// Page flow
+// =============================================================================
+function show(id) {
+  ["page-consent","page-role","page-demographics","page-survey","page-done"].forEach(function(p) {
+    document.getElementById(p).classList.add("hidden");
+  });
+  document.getElementById(id).classList.remove("hidden");
+}
+
+function startDemographics() {
+  state.lang = document.getElementById("lang-select").value;
+  if (!document.getElementById("consent-check").checked) {
+    document.getElementById("err-consent").textContent = ERR_CONSENT[state.lang];
+    return;
+  }
+  translateUI(state.lang);
+  // Assign role if not set via URL
+  if (!state.role) {
+    var roles = ["agent", "target", "observer"];
+    state.role = roles[Math.floor(Math.random() * 3)];
+  }
+  updateRoleBriefing(state.lang);
+  show("page-role");
+}
+
+function updateRoleBriefing(lang) {
+  var t = UI_TEXT[lang] || UI_TEXT.en;
+  var rl = ROLE_LABELS[lang] || ROLE_LABELS.en;
+  document.getElementById("role-icon").textContent = ROLE_ICONS[state.role] || "👤";
+  document.getElementById("ui-role-intro").innerHTML = (ROLE_BRIEFING[state.role] || {})[lang] || (ROLE_BRIEFING[state.role] || {}).en || "";
+  document.getElementById("ui-role-label-line").innerHTML = "<strong>" + (rl[state.role] || state.role) + "</strong>";
+  document.getElementById("ui-role-desc").textContent = (ROLE_DESCS[state.role] || {})[lang] || "";
+  document.getElementById("ui-role-instruction").textContent = "";
+}
+
+function startSurvey() {
+  var pid = document.getElementById("prolific-id").value.trim();
+  var age = document.getElementById("age").value.trim();
+  var gen = document.getElementById("gender").value;
+  var cty = document.getElementById("country").value.trim();
+  var fl  = document.getElementById("first-language").value.trim();
+  if (!pid || !age || !gen || !cty || !fl) {
+    document.getElementById("err-demo").textContent = ERR_DEMO[state.lang];
+    return;
+  }
+  state.prolificId = pid; state.age = age; state.gender = gen;
+  state.country = cty; state.firstLang = fl;
+
+  google.script.run
+    .withSuccessHandler(function(scenarios) {
+      state.scenarios = scenarios;
+      google.script.run
+        .withSuccessHandler(function(labels) {
+          state.labels = labels;
+          show("page-survey");
+          renderScenario();
+        })
+        .getResponseLabels(state.lang);
+    })
+    .getScenariosForSession(state.role, state.lang);
+}
+
+// =============================================================================
+// Survey rendering
+// =============================================================================
+function renderScenario() {
+  var s     = state.scenarios[state.current];
+  var total = state.scenarios.length;
+  var sit   = SITUATION_LABEL[state.lang] || SITUATION_LABEL.en;
+  var rl    = ROLE_LABELS[state.lang] || ROLE_LABELS.en;
+
+  document.getElementById("scenario-counter").textContent =
+    sit[0] + " " + (state.current + 1) + " " + sit[1] + " " + total;
+  document.getElementById("progress-fill").style.width =
+    Math.round((state.current / total) * 100) + "%";
+
+  // Role badge
+  document.getElementById("role-badge-survey").textContent =
+    (ROLE_ICONS[state.role] || "") + " " + (rl[state.role] || state.role);
+
+  document.getElementById("scenario-text").textContent = s[state.lang] || s.en || s.text || "";
+
+  // Role context card
+  var roleForCard = state.role === "agent" ? s.agent_role : (state.role === "target" ? s.target_role : null);
+  var ctxTemplate = (ROLE_CONTEXT_LINES[state.role] || {})[state.lang] || "";
+  var ctxText = ctxTemplate
+    .replace("{role}",   roleForCard || state.role)
+    .replace("{agent}",  s.agent_role || "agent")
+    .replace("{target}", s.target_role || "target");
+  document.getElementById("survey-role-icon").textContent = ROLE_ICONS[state.role] || "";
+  document.getElementById("survey-role-context").innerHTML = ctxText;
+
+  // Question
+  var qTemplate = (ROLE_QUESTIONS[state.role] || {})[state.lang] || "";
+  var qText = qTemplate
+    .replace("{role}",   roleForCard || state.role)
+    .replace("{agent}",  s.agent_role || "agent")
+    .replace("{target}", s.target_role || "target");
+  document.getElementById("question-text").textContent = qText;
+
+  // Response buttons
+  var container = document.getElementById("response-buttons");
+  container.innerHTML = "";
+  state.labels.forEach(function(item) {
+    var btn = document.createElement("button");
+    btn.className = "response-btn";
+    btn.textContent = item.label;
+    btn.onclick = function() { selectResponse(item.value, btn); };
+    container.appendChild(btn);
+  });
+
+  document.getElementById("btn-next").textContent =
+    (UI_TEXT[state.lang] || UI_TEXT.en)["btn-next"];
+  state.selected = null;
+  document.getElementById("btn-next").disabled = true;
+  document.getElementById("err-survey").textContent = "";
+}
+
+function selectResponse(value, btn) {
+  document.querySelectorAll(".response-btn").forEach(function(b) { b.classList.remove("selected"); });
+  btn.classList.add("selected");
+  state.selected = value;
+  document.getElementById("btn-next").disabled = false;
+}
+
+function nextScenario() {
+  if (!state.selected) return;
+  var s = state.scenarios[state.current];
+  document.getElementById("btn-next").disabled = true;
+
+  google.script.run
+    .withSuccessHandler(function(result) {
+      if (!result.ok) {
+        document.getElementById("err-survey").textContent = "Save error — try again.";
+        document.getElementById("btn-next").disabled = false;
+        return;
+      }
+      state.current++;
+      if (state.current >= state.scenarios.length) {
+        document.getElementById("done-count").textContent = state.scenarios.length;
+        translateUI(state.lang);
+        show("page-done");
+        document.getElementById("debug-panel").style.display = "none";
+      } else {
+        renderScenario();
+      }
+    })
+    .submitResponse(
+      state.prolificId, s.id, state.selected, state.role,
+      s.agent_role, s.target_role,
+      state.age, state.gender, state.country, state.lang
+    );
+}
+
+// =============================================================================
+// Debug panel
+// =============================================================================
+function debugLog(sid, response, role) {
+  var stored = JSON.parse(localStorage.getItem("cogemi_role_responses") || "[]");
+  var log    = document.getElementById("debug-log");
+  var entry  = document.createElement("div");
+  var attn   = ATTENTION_CHECKS.find(function(a) { return a.id === sid; });
+  var suffix = "";
+  if (attn) {
+    suffix = response === attn.expected
+      ? '<span class="attn-pass"> ✓ attn pass</span>'
+      : '<span class="attn-fail"> ✗ attn FAIL (exp: ' + attn.expected + ')</span>';
+  }
+  entry.innerHTML = "<strong>" + stored.length + ".</strong> [" + role + "] " +
+    sid.replace("rj_","") + " → " + response + suffix;
+  log.appendChild(entry);
+  log.scrollTop = log.scrollHeight;
+}
+
+// =============================================================================
+// CSV download / restart
+// =============================================================================
+function downloadCSV() {
+  var data = JSON.parse(localStorage.getItem("cogemi_role_responses") || "[]");
+  if (!data.length) { alert("No responses found."); return; }
+  var header = ["timestamp","prolific_id","scenario_id","response","role_perspective",
+                "agent_role","target_role","age","gender","country","language"];
+  var rows = data.map(function(r) {
+    return header.map(function(k) { return '"' + (r[k] || "") + '"'; }).join(",");
+  });
+  var csv  = header.join(",") + "\n" + rows.join("\n");
+  var blob = new Blob([csv], { type: "text/csv" });
+  var url  = URL.createObjectURL(blob);
+  var a    = document.createElement("a");
+  a.href = url; a.download = "cogemi_role_responses.csv"; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function clearAndRestart() {
+  localStorage.removeItem("cogemi_role_responses");
+  location.reload();
+}
+</script>
+</body>
+</html>

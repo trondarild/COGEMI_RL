@@ -141,7 +141,10 @@ class ContextLearner:
 
                     print(contexts_dict[action]['C'+str(j+1)])
 
-                    contexts_dict[action]['C'+str(i+1)]['Outcomes'] += contexts_dict[action]['C'+str(j+1)]['Outcomes']
+                    contexts_dict[action]['C'+str(i+1)]['Outcomes'] = (
+                        list(contexts_dict[action]['C'+str(i+1)]['Outcomes']) +
+                        list(contexts_dict[action]['C'+str(j+1)]['Outcomes'])
+                    )
                     contexts_dict[action]['C'+str(i+1)]['States'] += contexts_dict[action]['C'+str(j+1)]['States']
                     contexts_dict[action]['C'+str(i+1)]['Distribution'] = estimate_distribution(contexts_dict[action]['C'+str(i+1)]['Outcomes'])
 

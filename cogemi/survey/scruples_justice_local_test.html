@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<!--
+  LOCAL TEST VERSION — COGEMI SCRUPLES Justice Survey
+  Open directly in a browser. No server or Google account needed.
+
+  40 scenarios drawn from SCRUPLES Anecdotes (train split) filtered for
+  energy/effort/monetary cost incurred by the target with a question of fair
+  recompense.  Each participant sees 20 randomly chosen
+  scenarios + 2 fixed attention checks (positions 8 and 18).
+
+  Role assignment:
+    URL param ?role=agent / ?role=target / ?role=observer
+    If omitted, role is randomly assigned.
+
+  Responses saved to localStorage["cogemi_scj_responses"].
+  Debug panel (bottom-right) shows each response + attention-check results.
+  Completion page has a CSV download button.
+
+  Judgment map for COGEMI pipeline:
+    {"Just": 1, "Neutral": 0, "Unjust": -1}
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>[LOCAL TEST] Justice Study — SCRUPLES Survey</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f0f4f8; color: #222;
+      min-height: 100vh; display: flex;
+      align-items: flex-start; justify-content: center;
+      padding: 2rem 1rem;
+    }
+    .card {
+      background: #fff; border-radius: 10px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+      padding: 2rem; max-width: 660px; width: 100%;
+    }
+    h1 { font-size: 1.4rem; margin-bottom: 1rem; }
+    h2 { font-size: 1.1rem; margin-bottom: 0.75rem; color: #444; }
+    p  { line-height: 1.6; margin-bottom: 0.75rem; color: #333; }
+    .test-banner {
+      background: #fff3cd; border: 1px solid #ffc107;
+      border-radius: 6px; padding: 0.6rem 1rem;
+      font-size: 0.85rem; margin-bottom: 1rem; color: #856404;
+    }
+    .progress-bar { height: 6px; background: #e0e0e0; border-radius: 3px; margin-bottom: 1.5rem; overflow: hidden; }
+    .progress-fill { height: 100%; background: #5a7fc1; border-radius: 3px; transition: width 0.3s ease; }
+    .scenario-text {
+      font-size: 1.05rem; line-height: 1.65;
+      background: #f9f9f9;
+      border-left: 4px solid #5a7fc1;
+      padding: 1rem 1.25rem;
+      border-radius: 0 6px 6px 0;
+      margin-bottom: 1rem;
+    }
+    .role-card {
+      display: flex; align-items: center; gap: 0.6rem;
+      background: #eef2fb; border: 1px solid #c5d0ee;
+      border-radius: 8px; padding: 0.65rem 1rem;
+      font-size: 0.9rem; margin-bottom: 1rem;
+      color: #2a3d8a;
+    }
+    .role-card .role-icon { font-size: 1.2rem; }
+    .question { font-weight: 600; margin-bottom: 1rem; }
+    .response-buttons { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+    .response-btn {
+      flex: 1; min-width: 100px;
+      padding: 0.75rem 1rem;
+      border: 2px solid #ccc; border-radius: 8px;
+      background: #fff; font-size: 0.95rem; cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .response-btn:hover { border-color: #5a7fc1; background: #eef2fb; }
+    .response-btn.selected { border-color: #5a7fc1; background: #5a7fc1; color: #fff; }
+    .btn-primary {
+      display: block; width: 100%;
+      padding: 0.85rem; background: #5a7fc1; color: #fff;
+      border: none; border-radius: 8px;
+      font-size: 1rem; font-weight: 600; cursor: pointer;
+      margin-top: 1.5rem; transition: background 0.15s;
+    }
+    .btn-primary:hover    { background: #4166a8; }
+    .btn-primary:disabled { background: #aaa; cursor: not-allowed; }
+    .btn-secondary {
+      display: block; width: 100%;
+      padding: 0.75rem; background: #fff; color: #5a7fc1;
+      border: 2px solid #5a7fc1; border-radius: 8px;
+      font-size: 0.95rem; font-weight: 600; cursor: pointer;
+      margin-top: 0.75rem; transition: background 0.15s;
+    }
+    .btn-secondary:hover { background: #eef2fb; }
+    label { display: block; margin-bottom: 0.4rem; font-weight: 500; }
+    input, select {
+      width: 100%; padding: 0.55rem 0.75rem;
+      border: 1px solid #ccc; border-radius: 6px;
+      font-size: 0.95rem; margin-bottom: 1rem;
+    }
+    .field-row { display: flex; gap: 1rem; }
+    .field-row > div { flex: 1; }
+    .hidden { display: none; }
+    .small  { font-size: 0.85rem; color: #666; }
+    .error  { color: #c0392b; font-size: 0.9rem; margin-top: 0.5rem; }
+    .role-badge {
+      display: inline-block;
+      background: #5a7fc1; color: #fff;
+      padding: 0.2rem 0.7rem; border-radius: 20px;
+      font-size: 0.85rem; font-weight: 600;
+      margin-bottom: 1rem;
+    }
+    #debug-panel {
+      position: fixed; bottom: 1rem; right: 1rem;
+      width: 330px; max-height: 260px;
+      background: #1e1e1e; color: #9cdcfe;
+      border-radius: 8px; padding: 0.75rem;
+      font-family: monospace; font-size: 0.78rem;
+      overflow-y: auto; z-index: 9999;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+    }
+    #debug-panel h3 { color: #569cd6; margin-bottom: 0.5rem; font-size: 0.82rem; }
+    #debug-log div  { border-bottom: 1px solid #333; padding: 0.2rem 0; }
+    .attn-pass { color: #4ec9b0; }
+    .attn-fail { color: #f44747; }
+  </style>
+</head>
+<body>
+<div class="card">
+
+  <!-- CONSENT -->
+  <div id="page-consent">
+    <div class="test-banner">&#9888; LOCAL TEST MODE — responses saved to localStorage, not Google Sheets</div>
+    <h1>Justice Study</h1>
+    <p>Thank you for taking part. This study investigates how people judge the fairness of everyday interpersonal actions.</p>
+    <p>You will read <strong>20 short scenarios</strong> drawn from real-life situations and rate how just the described action is on a 3-point scale. The study takes approximately <strong>8 minutes</strong>.</p>
+    <p><strong>Your data:</strong> Responses are stored securely and linked only to your Prolific ID, removed after payment. Participation is voluntary and you may stop at any time.</p>
+    <p class="small">This research is conducted by [Institution]. Contact [email] with questions.</p>
+    <div style="margin-top:1.25rem">
+      <label><input type="checkbox" id="consent-check" style="width:auto;margin-right:0.5rem">
+        I have read the above and consent to participate.</label>
+    </div>
+    <button class="btn-primary" onclick="startDemographics()">Continue</button>
+    <div class="error" id="err-consent"></div>
+  </div>
+
+  <!-- ROLE BRIEFING -->
+  <div id="page-role" class="hidden">
+    <h1>Your role in this study</h1>
+    <p id="role-intro-text"></p>
+    <div class="role-card">
+      <span class="role-icon" id="role-icon"></span>
+      <div>
+        <div id="role-label-line"></div>
+        <div class="small" id="role-desc-text"></div>
+      </div>
+    </div>
+    <p id="role-instruction-text"></p>
+    <button class="btn-primary" onclick="show('page-demographics')">Continue to demographics</button>
+  </div>
+
+  <!-- DEMOGRAPHICS -->
+  <div id="page-demographics" class="hidden">
+    <h1>About you</h1>
+    <p class="small" style="margin-bottom:1rem">All fields are required.</p>
+    <label for="prolific-id">Prolific ID (use any string for testing)</label>
+    <input type="text" id="prolific-id" placeholder="e.g. test_participant_01" value="test_participant_01">
+    <div class="field-row">
+      <div>
+        <label for="age">Age</label>
+        <input type="number" id="age" min="18" max="99" value="30">
+      </div>
+      <div>
+        <label for="gender">Gender</label>
+        <select id="gender">
+          <option value="">-- select --</option>
+          <option value="Woman">Woman</option>
+          <option value="Man">Man</option>
+          <option value="Nonbinary">Non-binary / third gender</option>
+          <option value="Prefer">Prefer not to say</option>
+        </select>
+      </div>
+    </div>
+    <label for="country">Country of origin</label>
+    <input type="text" id="country" value="Norway">
+    <label for="first-language">First language</label>
+    <input type="text" id="first-language" value="Norwegian">
+    <button class="btn-primary" onclick="startSurvey()">Start survey</button>
+    <div class="error" id="err-demo"></div>
+  </div>
+
+  <!-- SURVEY -->
+  <div id="page-survey" class="hidden">
+    <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+    <h2 id="scenario-counter"></h2>
+    <div id="role-badge-survey" class="role-badge"></div>
+    <div class="scenario-text" id="scenario-text"></div>
+    <div class="role-card" id="role-context-card">
+      <span class="role-icon" id="survey-role-icon"></span>
+      <span id="survey-role-context"></span>
+    </div>
+    <p class="question" id="question-text"></p>
+    <div class="response-buttons" id="response-buttons"></div>
+    <button class="btn-primary" id="btn-next" disabled onclick="nextScenario()">Next</button>
+    <div class="error" id="err-survey"></div>
+  </div>
+
+  <!-- COMPLETION -->
+  <div id="page-done" class="hidden">
+    <h1>Thank you!</h1>
+    <p>You have completed all <span id="done-count"></span> scenarios.</p>
+    <p>In the real study, return to Prolific with completion code: <strong>COGEMI2025</strong></p>
+    <p class="small">In this test, responses were saved to <code>localStorage["cogemi_scj_responses"]</code>.</p>
+    <button class="btn-secondary" onclick="downloadCSV()">Download responses (CSV)</button>
+    <button class="btn-secondary" onclick="clearAndRestart()" style="margin-top:0.5rem">Restart test</button>
+  </div>
+
+</div>
+
+<div id="debug-panel">
+  <h3>Debug — responses so far</h3>
+  <div id="debug-log"></div>
+</div>
+
+<script>
+// =============================================================================
+// Scenario data — 40 scenarios from SCRUPLES Anecdotes (justice subset)
+// Generated by cogemi.data.scruples.select_survey_scenarios()
+// =============================================================================
+// Scenarios selected by cogemi.data.scruples.select_survey_scenarios()
+// Filter: energy/effort/monetary cost incurred by target, question of fair recompense
+var SCENARIOS = [
+  {id:"scj_b18gsq",  text:"Getting mad at my mom for not cooking dinner",                                                                              agent_role:"author", target_role:"mom"},
+  {id:"scj_awkeuq",  text:"Expecting my wife to do more of the housework because I bring in more income",                                              agent_role:"author", target_role:"wife"},
+  {id:"scj_avvzw1",  text:"Secretly spending my wife\u2019s inheritance",                                                                             agent_role:"author", target_role:"wife"},
+  {id:"scj_axmokw",  text:"Thinking that I am entitled to some or all of my mom\u2019s unpaid child support",                                          agent_role:"author", target_role:"mom"},
+  {id:"scj_azbvgi",  text:"Not taking care of my sick girlfriend",                                                                                     agent_role:"author", target_role:"girlfriend"},
+  {id:"scj_b1vide",  text:"Thinking my boyfriend and I shouldn\u2019t pay more rent because we share a room",                                         agent_role:"author", target_role:"boyfriend"},
+  {id:"scj_alvej2",  text:"Not entirely paying for my son\u2019s tuition",                                                                            agent_role:"author", target_role:"son"},
+  {id:"scj_al5il5",  text:"Not forgiving some of my daughter\u2019s debt",                                                                            agent_role:"author", target_role:"daughter"},
+  {id:"scj_ak5e2b",  text:"Wanting my husband to pay for my daughter\u2019s college tuition",                                                         agent_role:"author", target_role:"husband"},
+  {id:"scj_ar8o9n",  text:"Asking my friend to pay me half the money",                                                                                agent_role:"author", target_role:"friend"},
+  {id:"scj_ammnkv",  text:"Not being in a rush to pay back my roommate",                                                                               agent_role:"author", target_role:"roommate"},
+  {id:"scj_asvp9l",  text:"Cleaning my shoes with my sister\u2019s toothbrush",                                                                       agent_role:"author", target_role:"sister"},
+  {id:"scj_b79ow0",  text:"Not wanting to pay for my mother",                                                                                         agent_role:"author", target_role:"mother"},
+  {id:"scj_9y3ser",  text:"Stealing money from my father-in-law\u2019s wallet",                                                                       agent_role:"author", target_role:"father"},
+  {id:"scj_a2su26",  text:"Being mad that my dad wouldn\u2019t co-sign on my car loan unless I bought a car he agreed to",                            agent_role:"author", target_role:"dad"},
+  {id:"scj_b5k02p",  text:"Paying for my son to go to college, but not my daughter",                                                                  agent_role:"author", target_role:"son"},
+  {id:"scj_b1x2zc",  text:"Thinking my wife doesn\u2019t deserve part of my tax return",                                                              agent_role:"author", target_role:"wife"},
+  {id:"scj_b46lzu",  text:"Wanting my wife to eat my vegetarian cooking",                                                                             agent_role:"author", target_role:"wife"},
+  {id:"scj_9uupsy",  text:"Wanting to sleep at night while my wife takes care of our newborn",                                                         agent_role:"author", target_role:"wife"},
+  {id:"scj_axm7a6",  text:"Not paying my friend to be in my short films",                                                                             agent_role:"author", target_role:"friend"},
+  {id:"scj_aalude",  text:"Not wanting to babysit my brother\u2019s kid and critiquing his parenting",                                                agent_role:"author", target_role:"brother"},
+  {id:"scj_a73h8q",  text:"Not sharing my inheritance with my sister",                                                                                agent_role:"author", target_role:"sister"},
+  {id:"scj_9w9bgg",  text:"Taking money from my neighbour after she died in 9/11",                                                                     agent_role:"author", target_role:"neighbour"},
+  {id:"scj_b8z75q",  text:"Expecting my boyfriend\u2019s parents to help me pay for a trip",                                                          agent_role:"author", target_role:"boyfriend"},
+  {id:"scj_apyw61",  text:"Asking my girlfriend\u2019s parents to help me pay for damages I caused to her car",                                       agent_role:"author", target_role:"girlfriend"},
+  {id:"scj_b43t53",  text:"Giving my ex-wife a large amount of money I won despite my girlfriend\u2019s objections",                                  agent_role:"author", target_role:"wife"},
+  {id:"scj_ashfts",  text:"Telling my friend I didn\u2019t appreciate paying for a \u00a3200 meal at her husband\u2019s birthday party",              agent_role:"author", target_role:"friend"},
+  {id:"scj_b4yx07",  text:"Suing my ex for child support that I don\u2019t need",                                                                     agent_role:"author", target_role:"child"},
+  {id:"scj_asb3ak",  text:"Not wanting to put my fianc\u00e9\u2019s name on a house bought with my father\u2019s life insurance money",              agent_role:"author", target_role:"father"},
+  {id:"scj_a5w9zh",  text:"Refusing to give my little brother money that has been left for me",                                                        agent_role:"author", target_role:"brother"},
+  {id:"scj_b946w5",  text:"Not wanting to pay for my friend who has a medical condition",                                                              agent_role:"author", target_role:"friend"},
+  {id:"scj_b2pj6e",  text:"Expecting my husband to take care of the baby sometimes even though he works more than I do",                               agent_role:"author", target_role:"husband"},
+  {id:"scj_azgj36",  text:"Asking for my money back from my girlfriend",                                                                               agent_role:"author", target_role:"girlfriend"},
+  {id:"scj_asukrf",  text:"Being annoyed that my boyfriend asked me for money in exchange for picking me up",                                          agent_role:"author", target_role:"boyfriend"},
+  {id:"scj_avtkks",  text:"Charging to babysit my own grandson",                                                                                      agent_role:"author", target_role:"son"},
+  {id:"scj_b8xzhu",  text:"Not wanting to split my credit card points with my partner",                                                                agent_role:"author", target_role:"partner"},
+  {id:"scj_9uouyt",  text:"Telling my daughter her husband should get a job to pay me back an \u00a31,800 loan I gave them",                          agent_role:"author", target_role:"daughter"},
+  {id:"scj_apk660",  text:"Not paying my roommate for groceries her mom bought without my permission",                                                 agent_role:"author", target_role:"roommate"},
+  {id:"scj_aija2y",  text:"Not giving my mother money to pay off her debts",                                                                           agent_role:"author", target_role:"mother"},
+  {id:"scj_albv2m",  text:"Demanding my sister-in-law pay for the damages she caused to my property",                                                  agent_role:"author", target_role:"sister"}
+];
+
+var ATTENTION_CHECKS = [
+  {id:"scj_check_unjust", text:"Hiding from a partner that you were made redundant three months ago",         agent_role:"author", target_role:"partner",  expected:"Unjust"},
+  {id:"scj_check_just",   text:"Reporting a family member to the police after finding out they stole money from you", agent_role:"author", target_role:"family member", expected:"Just"}
+];
+
+// =============================================================================
+// Role configuration
+// =============================================================================
+var ROLE_ICONS  = { agent: "&#127919;", target: "&#128587;", observer: "&#128065;" };
+var ROLE_LABELS = { agent: "Agent", target: "Target", observer: "Observer" };
+
+var ROLE_DESCS = {
+  agent:    "The person who performed the action described",
+  target:   "The person the action was directed at",
+  observer: "A neutral outside observer"
+};
+
+var ROLE_BRIEFING = {
+  agent:    "You will read 20 short scenarios. In each one, <strong>you are the person who did the action</strong>. Rate how just your own action was.",
+  target:   "You will read 20 short scenarios. In each one, <strong>you are the person the action was directed at</strong>. Rate how just the action done to you was.",
+  observer: "You will read 20 short scenarios. In each one, <strong>you are a neutral outside observer</strong>. Rate how just the person\u2019s action was."
+};
+
+var ROLE_CONTEXT = {
+  agent:    function(s) { return "In this scenario, you are <strong>the person who took the action</strong>."; },
+  target:   function(s) { return "In this scenario, you are the <strong>" + s.target_role + "</strong>."; },
+  observer: function(s) { return "You are an <strong>outside observer</strong> watching this situation."; }
+};
+
+var ROLE_QUESTION = {
+  agent:    function(s) { return "How just is what you are doing to your " + s.target_role + "?"; },
+  target:   function(s) { return "How just is what is being done to you?"; },
+  observer: function(s) { return "How just is the person\u2019s action toward their " + s.target_role + "?"; }
+};
+
+var RESPONSE_LABELS = ["Unjust", "Neutral", "Just"];
+
+// =============================================================================
+// State
+// =============================================================================
+var state = {
+  role: null,
+  queue: [],
+  idx: 0,
+  responses: [],
+  attnResults: [],
+  ATTN_POSITIONS: [7, 17]   // 0-indexed positions for attention checks in 22-item sequence
+};
+
+// =============================================================================
+// Initialisation
+// =============================================================================
+(function init() {
+  var params = new URLSearchParams(window.location.search);
+  var roleParam = params.get("role");
+  var roles = ["agent", "target", "observer"];
+  state.role = roles.includes(roleParam) ? roleParam : roles[Math.floor(Math.random() * 3)];
+  updateRoleBriefing();
+})();
+
+function updateRoleBriefing() {
+  var r = state.role;
+  document.getElementById("role-icon").innerHTML      = ROLE_ICONS[r];
+  document.getElementById("role-label-line").innerHTML = "<strong>" + ROLE_LABELS[r] + "</strong>";
+  document.getElementById("role-desc-text").textContent = ROLE_DESCS[r];
+  document.getElementById("role-intro-text").textContent = "You have been assigned the role of: ";
+  document.getElementById("role-instruction-text").innerHTML = ROLE_BRIEFING[r];
+}
+
+// =============================================================================
+// Navigation helpers
+// =============================================================================
+function show(id) {
+  var pages = ["page-consent","page-role","page-demographics","page-survey","page-done"];
+  pages.forEach(function(p) {
+    document.getElementById(p).classList.toggle("hidden", p !== id);
+  });
+}
+
+function startDemographics() {
+  if (!document.getElementById("consent-check").checked) {
+    document.getElementById("err-consent").textContent = "Please tick the consent box to continue.";
+    return;
+  }
+  document.getElementById("err-consent").textContent = "";
+  show("page-role");
+}
+
+function startSurvey() {
+  var pid  = document.getElementById("prolific-id").value.trim();
+  var age  = document.getElementById("age").value.trim();
+  var gen  = document.getElementById("gender").value;
+  var coun = document.getElementById("country").value.trim();
+  var lang = document.getElementById("first-language").value.trim();
+  if (!pid || !age || !gen || !coun || !lang) {
+    document.getElementById("err-demo").textContent = "Please fill in all fields.";
+    return;
+  }
+  document.getElementById("err-demo").textContent = "";
+  state.participantId  = pid;
+  state.demographics   = { age: age, gender: gen, country: coun, language: lang };
+
+  // Build queue: 20 random scenarios + 2 attention checks at fixed positions
+  var pool = SCENARIOS.slice();
+  // Fisher-Yates shuffle
+  for (var i = pool.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp;
+  }
+  var twenty = pool.slice(0, 20);
+  // Insert attention checks at positions 7 and 17 (0-indexed)
+  var attn = ATTENTION_CHECKS.slice();
+  twenty.splice(state.ATTN_POSITIONS[0], 0, attn[0]);
+  twenty.splice(state.ATTN_POSITIONS[1], 0, attn[1]);
+  state.queue = twenty;
+  state.idx = 0;
+
+  show("page-survey");
+  renderScenario();
+}
+
+// =============================================================================
+// Survey rendering
+// =============================================================================
+function renderScenario() {
+  var total = state.queue.length;
+  var s = state.queue[state.idx];
+  var r = state.role;
+
+  // Progress
+  document.getElementById("progress-fill").style.width = (state.idx / total * 100) + "%";
+  document.getElementById("scenario-counter").textContent = "Situation " + (state.idx + 1) + " of " + total;
+
+  // Role badge
+  document.getElementById("role-badge-survey").innerHTML = ROLE_ICONS[r] + " " + ROLE_LABELS[r];
+
+  // Scenario text
+  document.getElementById("scenario-text").textContent = s.text;
+
+  // Role context card
+  document.getElementById("survey-role-icon").innerHTML = ROLE_ICONS[r];
+  document.getElementById("survey-role-context").innerHTML = ROLE_CONTEXT[r](s);
+
+  // Question
+  document.getElementById("question-text").textContent = ROLE_QUESTION[r](s);
+
+  // Response buttons
+  var btns = document.getElementById("response-buttons");
+  btns.innerHTML = "";
+  RESPONSE_LABELS.forEach(function(label) {
+    var btn = document.createElement("button");
+    btn.className = "response-btn";
+    btn.textContent = label;
+    btn.onclick = function() {
+      btns.querySelectorAll(".response-btn").forEach(function(b) { b.classList.remove("selected"); });
+      btn.classList.add("selected");
+      btn.dataset.value = label;
+      document.getElementById("btn-next").disabled = false;
+      document.getElementById("err-survey").textContent = "";
+    };
+    btns.appendChild(btn);
+  });
+
+  document.getElementById("btn-next").disabled = true;
+}
+
+function nextScenario() {
+  var selected = document.querySelector(".response-btn.selected");
+  if (!selected) {
+    document.getElementById("err-survey").textContent = "Please select a response.";
+    return;
+  }
+  var s   = state.queue[state.idx];
+  var val = selected.textContent;
+
+  // Check attention
+  if (s.expected) {
+    var pass = (val === s.expected);
+    state.attnResults.push({ id: s.id, expected: s.expected, given: val, pass: pass });
+    logDebug((pass ? "PASS" : "FAIL") + " attn " + s.id + " exp=" + s.expected + " got=" + val, pass ? "attn-pass" : "attn-fail");
+  } else {
+    logDebug(s.id + " → " + val);
+  }
+
+  state.responses.push({
+    participant_id:  state.participantId,
+    scenario_id:     s.id,
+    response:        val,
+    role_perspective: state.role,
+    is_attention:    !!s.expected,
+    timestamp:       new Date().toISOString()
+  });
+  saveLocal();
+
+  state.idx++;
+  if (state.idx < state.queue.length) {
+    renderScenario();
+  } else {
+    showDone();
+  }
+}
+
+// =============================================================================
+// Completion
+// =============================================================================
+function showDone() {
+  document.getElementById("done-count").textContent = state.responses.length;
+  show("page-done");
+}
+
+// =============================================================================
+// Persistence & export
+// =============================================================================
+function saveLocal() {
+  try { localStorage.setItem("cogemi_scj_responses", JSON.stringify(state.responses)); } catch(e) {}
+}
+
+function downloadCSV() {
+  var rows = ["participant_id,scenario_id,response,role_perspective,is_attention,timestamp"];
+  state.responses.forEach(function(r) {
+    rows.push([r.participant_id, r.scenario_id, r.response, r.role_perspective, r.is_attention, r.timestamp].join(","));
+  });
+  var blob = new Blob([rows.join("\n")], { type: "text/csv" });
+  var a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "cogemi_scj_" + (state.participantId || "test") + "_" + state.role + ".csv";
+  a.click();
+}
+
+function clearAndRestart() {
+  try { localStorage.removeItem("cogemi_scj_responses"); } catch(e) {}
+  location.reload();
+}
+
+// =============================================================================
+// Debug panel
+// =============================================================================
+function logDebug(msg, cls) {
+  var log = document.getElementById("debug-log");
+  var d = document.createElement("div");
+  d.textContent = msg;
+  if (cls) d.className = cls;
+  log.appendChild(d);
+  log.scrollTop = log.scrollHeight;
+}
+</script>
+</body>
+</html>
