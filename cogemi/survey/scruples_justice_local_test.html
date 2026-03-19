@@ -123,6 +123,12 @@
     #debug-log div  { border-bottom: 1px solid #333; padding: 0.2rem 0; }
     .attn-pass { color: #4ec9b0; }
     .attn-fail { color: #f44747; }
+    /* ── context word-click phase ── */
+    .word-token { cursor:pointer; display:inline; border-radius:3px; padding:1px 3px; transition:background 0.12s; }
+    .word-token:hover { background:#e8eef8; }
+    .word-token.w-sel { background:#5a7fc1; color:#fff; border-radius:3px; }
+    .click-rank { font-size:0.62rem; vertical-align:super; font-weight:700; margin-left:1px; }
+    .context-prompt { font-size:0.92rem; color:#555; margin-bottom:0.6rem; font-style:italic; }
   </style>
 </head>
 <body>
@@ -201,7 +207,13 @@
     </div>
     <p class="question" id="question-text"></p>
     <div class="response-buttons" id="response-buttons"></div>
-    <button class="btn-primary" id="btn-next" disabled onclick="nextScenario()">Next</button>
+    <!-- context word-click phase (shown after rating) -->
+    <div id="context-phase" class="hidden">
+      <p class="context-prompt">Which word(s) most influenced your judgment? Click them <strong>in order of importance</strong>. Click again to deselect.</p>
+      <div class="scenario-text" id="scenario-text-ctx" style="line-height:2.2"></div>
+      <p class="small" style="margin-top:0.6rem;color:#999">Nothing specific? Just click <em>Continue →</em>.</p>
+    </div>
+    <button class="btn-primary" id="btn-next" disabled onclick="nextScenario()">Next →</button>
     <div class="error" id="err-survey"></div>
   </div>
 
@@ -318,7 +330,10 @@ var state = {
   idx: 0,
   responses: [],
   attnResults: [],
-  ATTN_POSITIONS: [7, 17]   // 0-indexed positions for attention checks in 22-item sequence
+  ATTN_POSITIONS: [7, 17],   // 0-indexed positions for attention checks in 22-item sequence
+  phase: "rating",           // "rating" | "context"
+  pendingRating: null,
+  clickedWords: []           // [{word, tidx, rank}]
 };
 
 // =============================================================================
@@ -435,34 +450,121 @@ function renderScenario() {
     btns.appendChild(btn);
   });
 
+  // Reset context phase UI
+  state.phase = "rating";
+  state.pendingRating = null;
+  state.clickedWords = [];
+  document.getElementById("context-phase").classList.add("hidden");
+  document.getElementById("response-buttons").style.display = "";
+  document.getElementById("question-text").style.display = "";
+  document.getElementById("btn-next").textContent = "Next \u2192";
   document.getElementById("btn-next").disabled = true;
 }
 
 function nextScenario() {
-  var selected = document.querySelector(".response-btn.selected");
-  if (!selected) {
-    document.getElementById("err-survey").textContent = "Please select a response.";
+  if (state.phase === "rating") {
+    var selected = document.querySelector(".response-btn.selected");
+    if (!selected) {
+      document.getElementById("err-survey").textContent = "Please select a response.";
+      return;
+    }
+    state.pendingRating = selected.textContent;
+    enterContextPhase();
     return;
   }
-  var s   = state.queue[state.idx];
-  var val = selected.textContent;
+  // phase === "context"
+  saveAndAdvance();
+}
 
-  // Check attention
+function enterContextPhase() {
+  state.phase = "context";
+  state.clickedWords = [];
+  document.getElementById("response-buttons").style.display = "none";
+  document.getElementById("question-text").style.display = "none";
+  document.getElementById("context-phase").classList.remove("hidden");
+  buildClickableText(state.queue[state.idx].text, "scenario-text-ctx");
+  document.getElementById("btn-next").textContent = "Continue \u2192";
+  document.getElementById("btn-next").disabled = false;
+  document.getElementById("err-survey").textContent = "";
+}
+
+function buildClickableText(text, containerId) {
+  var container = document.getElementById(containerId);
+  container.innerHTML = "";
+  text.split(/(\s+)/).forEach(function(token, i) {
+    if (/^\s+$/.test(token)) {
+      container.appendChild(document.createTextNode(token));
+      return;
+    }
+    var outer = document.createElement("span");
+    outer.className = "word-token";
+    outer.dataset.clean = token.replace(/[^a-zA-Z0-9'\u2019-]/g, "").toLowerCase();
+    outer.dataset.tidx = i;
+    var textNode = document.createElement("span");
+    textNode.textContent = token;
+    outer.appendChild(textNode);
+    var badge = document.createElement("sup");
+    badge.className = "click-rank";
+    badge.style.display = "none";
+    outer.appendChild(badge);
+    outer.onclick = function() { toggleWord(outer); };
+    container.appendChild(outer);
+  });
+}
+
+function toggleWord(span) {
+  var tidx = parseInt(span.dataset.tidx);
+  var badge = span.querySelector(".click-rank");
+  if (span.classList.contains("w-sel")) {
+    state.clickedWords = state.clickedWords.filter(function(w) { return w.tidx !== tidx; });
+    span.classList.remove("w-sel");
+    badge.style.display = "none";
+    renumberWords();
+  } else {
+    var rank = state.clickedWords.length + 1;
+    state.clickedWords.push({ word: span.dataset.clean, tidx: tidx, rank: rank });
+    span.classList.add("w-sel");
+    badge.textContent = rank;
+    badge.style.display = "";
+  }
+}
+
+function renumberWords() {
+  state.clickedWords.sort(function(a, b) { return a.rank - b.rank; });
+  state.clickedWords.forEach(function(w, i) { w.rank = i + 1; });
+  document.querySelectorAll("#scenario-text-ctx .word-token.w-sel").forEach(function(sp) {
+    var tidx = parseInt(sp.dataset.tidx);
+    var entry = state.clickedWords.find(function(w) { return w.tidx === tidx; });
+    if (entry) {
+      var b = sp.querySelector(".click-rank");
+      if (b) { b.textContent = entry.rank; b.style.display = ""; }
+    }
+  });
+}
+
+function saveAndAdvance() {
+  var s   = state.queue[state.idx];
+  var val = state.pendingRating;
+  var contextWords = state.clickedWords
+    .sort(function(a, b) { return a.rank - b.rank; })
+    .map(function(w) { return w.word; }).join("|");
+
   if (s.expected) {
     var pass = (val === s.expected);
     state.attnResults.push({ id: s.id, expected: s.expected, given: val, pass: pass });
     logDebug((pass ? "PASS" : "FAIL") + " attn " + s.id + " exp=" + s.expected + " got=" + val, pass ? "attn-pass" : "attn-fail");
   } else {
-    logDebug(s.id + " → " + val);
+    logDebug(s.id + " \u2192 " + val + (contextWords ? " [" + contextWords + "]" : ""));
   }
 
   state.responses.push({
-    participant_id:  state.participantId,
-    scenario_id:     s.id,
-    response:        val,
+    participant_id:   state.participantId,
+    scenario_id:      s.id,
+    response:         val,
     role_perspective: state.role,
-    is_attention:    !!s.expected,
-    timestamp:       new Date().toISOString()
+    context_words:    contextWords,
+    is_attention:     !!s.expected,
+    timestamp:        new Date().toISOString()
   });
   saveLocal();
 
@@ -490,9 +592,13 @@ function saveLocal() {
 }
 
 function downloadCSV() {
-  var rows = ["participant_id,scenario_id,response,role_perspective,is_attention,timestamp"];
+  var rows = ["participant_id,scenario_id,response,role_perspective,context_words,is_attention,timestamp"];
   state.responses.forEach(function(r) {
-    rows.push([r.participant_id, r.scenario_id, r.response, r.role_perspective, r.is_attention, r.timestamp].join(","));
+    rows.push([
+      r.participant_id, r.scenario_id, r.response, r.role_perspective,
+      '"' + (r.context_words || "") + '"',
+      r.is_attention, r.timestamp
+    ].join(","));
   });
   var blob = new Blob([rows.join("\n")], { type: "text/csv" });
   var a = document.createElement("a");

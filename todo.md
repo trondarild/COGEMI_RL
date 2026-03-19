@@ -46,10 +46,11 @@
 - [x] commit current version
 - [x] clean up, delete unneccessary files (out.py, out.txt, scratch files in root)
 - [x] update and tidy file structure
-- [ ] add cogemi*.csv, aesop*.csv in data folder to github; modify .gitignore appropriately
+- [x] add cogemi*.csv, aesop*.csv in data folder to github; modify .gitignore appropriately
 ## Documentation
 - [x] update readme.md with installation procedure
 ## Online experiments
+- [x] update local test html surveys with contextual question: after rating a scenario according to the ternary scale, the survey should present a question "what is the contextual element which made you judge the situation the way you did - please click on the relevant part(s) of the text in order of importance". Each word in the text should now be clickable and both words and the order of clicks should be saved to the csv file
 - [ ] prepare online experiments to gather data for social appropriateness
     - [x] make a plan for carrying out experiments
     - [x] prepare budget for Prolific experiment

@@ -116,6 +116,12 @@
     #debug-log div  { border-bottom: 1px solid #333; padding: 0.2rem 0; }
     .attn-pass { color: #4ec9b0; }
     .attn-fail { color: #f44747; }
+    /* ── context word-click phase ── */
+    .word-token { cursor:pointer; display:inline; border-radius:3px; padding:1px 3px; transition:background 0.12s; }
+    .word-token:hover { background:#e8eef8; }
+    .word-token.w-sel { background:#5a7fc1; color:#fff; border-radius:3px; }
+    .click-rank { font-size:0.62rem; vertical-align:super; font-weight:700; margin-left:1px; }
+    .context-prompt { font-size:0.92rem; color:#555; margin-bottom:0.6rem; font-style:italic; }
   </style>
 </head>
 <body>
@@ -201,6 +207,12 @@
     </div>
     <p class="question" id="question-text"></p>
     <div class="response-buttons" id="response-buttons"></div>
+    <!-- context word-click phase (shown after rating) -->
+    <div id="context-phase" class="hidden">
+      <p class="context-prompt" id="ui-context-prompt">Which word(s) most influenced your judgment? Click them <strong>in order of importance</strong>. Click again to deselect.</p>
+      <div class="scenario-text" id="scenario-text-ctx" style="line-height:2.2"></div>
+      <p class="small" style="margin-top:0.6rem;color:#999" id="ui-context-skip">Nothing specific? Just click <em>Continue →</em>.</p>
+    </div>
     <button class="btn-primary" id="btn-next" disabled onclick="nextScenario()"></button>
     <div class="error" id="err-survey"></div>
   </div>
@@ -552,11 +564,12 @@ function mockGetScenarios() {
   return pool;
 }
 
-function mockSubmit(pid, sid, resp, role, agentRole, targetRole, age, gender, country, lang) {
+function mockSubmit(pid, sid, resp, role, agentRole, targetRole, age, gender, country, lang, contextWords) {
   var stored = JSON.parse(localStorage.getItem("cogemi_role_responses") || "[]");
   stored.push({ timestamp: new Date().toISOString(), prolific_id: pid,
     scenario_id: sid, response: resp, role_perspective: role,
     agent_role: agentRole, target_role: targetRole,
+    context_words: contextWords || "",
     age: age, gender: gender, country: country, language: lang });
   localStorage.setItem("cogemi_role_responses", JSON.stringify(stored));
   debugLog(sid, resp, role);
@@ -675,8 +688,14 @@ function renderScenario() {
   });
 
   document.getElementById("btn-next").textContent =
-    (UI_TEXT[state.lang] || UI_TEXT.en)["btn-next"];
+    (UI_TEXT[state.lang] || UI_TEXT.en)["btn-next"] + " \u2192";
   state.selected = null;
+  state.phase = "rating";
+  state.pendingRating = null;
+  state.clickedWords = [];
+  document.getElementById("context-phase").classList.add("hidden");
+  document.getElementById("response-buttons").style.display = "";
+  document.getElementById("question-text").style.display = "";
   document.getElementById("btn-next").disabled = true;
   document.getElementById("err-survey").textContent = "";
 }
@@ -689,8 +708,17 @@ function selectResponse(value, btn) {
 }
 
 function nextScenario() {
-  if (!state.selected) return;
+  if (state.phase === "rating") {
+    if (!state.selected) return;
+    state.pendingRating = state.selected;
+    enterContextPhase();
+    return;
+  }
+  // phase === "context" — submit and advance
   var s = state.scenarios[state.current];
+  var contextWords = state.clickedWords
+    .sort(function(a, b) { return a.rank - b.rank; })
+    .map(function(w) { return w.word; }).join("|");
   document.getElementById("btn-next").disabled = true;
 
   google.script.run
@@ -711,10 +739,77 @@ function nextScenario() {
       }
     })
     .submitResponse(
-      state.prolificId, s.id, state.selected, state.role,
+      state.prolificId, s.id, state.pendingRating, state.role,
       s.agent_role, s.target_role,
-      state.age, state.gender, state.country, state.lang
+      state.age, state.gender, state.country, state.lang, contextWords
     );
+}
+
+function enterContextPhase() {
+  state.phase = "context";
+  state.clickedWords = [];
+  document.getElementById("response-buttons").style.display = "none";
+  document.getElementById("question-text").style.display = "none";
+  document.getElementById("context-phase").classList.remove("hidden");
+  var s = state.scenarios[state.current];
+  buildClickableText(s[state.lang] || s.en || s.text || "", "scenario-text-ctx");
+  document.getElementById("btn-next").textContent = "Continue \u2192";
+  document.getElementById("btn-next").disabled = false;
+  document.getElementById("err-survey").textContent = "";
+}
+
+function buildClickableText(text, containerId) {
+  var container = document.getElementById(containerId);
+  container.innerHTML = "";
+  text.split(/(\s+)/).forEach(function(token, i) {
+    if (/^\s+$/.test(token)) {
+      container.appendChild(document.createTextNode(token));
+      return;
+    }
+    var outer = document.createElement("span");
+    outer.className = "word-token";
+    outer.dataset.clean = token.replace(/[^a-zA-Z0-9'\u2019-]/g, "").toLowerCase();
+    outer.dataset.tidx = i;
+    var textNode = document.createElement("span");
+    textNode.textContent = token;
+    outer.appendChild(textNode);
+    var badge = document.createElement("sup");
+    badge.className = "click-rank";
+    badge.style.display = "none";
+    outer.appendChild(badge);
+    outer.onclick = function() { toggleWord(outer); };
+    container.appendChild(outer);
+  });
+}
+
+function toggleWord(span) {
+  var tidx = parseInt(span.dataset.tidx);
+  var badge = span.querySelector(".click-rank");
+  if (span.classList.contains("w-sel")) {
+    state.clickedWords = state.clickedWords.filter(function(w) { return w.tidx !== tidx; });
+    span.classList.remove("w-sel");
+    badge.style.display = "none";
+    renumberWords();
+  } else {
+    var rank = state.clickedWords.length + 1;
+    state.clickedWords.push({ word: span.dataset.clean, tidx: tidx, rank: rank });
+    span.classList.add("w-sel");
+    badge.textContent = rank;
+    badge.style.display = "";
+  }
+}
+
+function renumberWords() {
+  state.clickedWords.sort(function(a, b) { return a.rank - b.rank; });
+  state.clickedWords.forEach(function(w, i) { w.rank = i + 1; });
+  document.querySelectorAll("#scenario-text-ctx .word-token.w-sel").forEach(function(sp) {
+    var tidx = parseInt(sp.dataset.tidx);
+    var entry = state.clickedWords.find(function(w) { return w.tidx === tidx; });
+    if (entry) {
+      var b = sp.querySelector(".click-rank");
+      if (b) { b.textContent = entry.rank; b.style.display = ""; }
+    }
+  });
 }
 
 // =============================================================================
@@ -744,7 +839,7 @@ function downloadCSV() {
   var data = JSON.parse(localStorage.getItem("cogemi_role_responses") || "[]");
   if (!data.length) { alert("No responses found."); return; }
   var header = ["timestamp","prolific_id","scenario_id","response","role_perspective",
-                "agent_role","target_role","age","gender","country","language"];
+                "context_words","agent_role","target_role","age","gender","country","language"];
   var rows = data.map(function(r) {
     return header.map(function(k) { return '"' + (r[k] || "") + '"'; }).join(",");
   });
