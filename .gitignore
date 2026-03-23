@@ -222,7 +222,7 @@ data/anecdotes/
 data/dilemmas/
 data/aesop_children_19994.txt
 
-# Derived COGEMI CSVs are tracked (cogemi_*.csv, aesop_*.csv)
+# Derived COGEMI CSVs and pilot datasets are tracked
 # Raw survey response exports are not tracked
 data/cogemi_test_responses.csv
 data/cogemi_role_responses.csv

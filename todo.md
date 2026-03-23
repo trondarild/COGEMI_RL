@@ -36,6 +36,7 @@
 - [x] write out to csv files the cogemi versions of normbank, scruples, aesops datasets if not already done
 - [ ] semantic action clustering (LLM normalisation of raw SCRUPLES action strings)
 - [ ] SCRUPLES Dilemmas — defer (pairwise format needs Bradley-Terry or similar)
+- [ ] normbank: cluster unique actions
 ### Morals from childrens books
  - [x] research the possibility to download free childrens books with moral content from online repositories
  - [x] download a free children's book with moral content
@@ -60,3 +61,9 @@
     - [ ] pay Prolific and commence live experiment
 ## Communication and collaboration
 - [x] summarise progress so far and give examples of current scenario-data for social-appropriateness, morals-from-children's-books, justice
+
+## From meetings
+- [x] check if Prolific has template for survey, or if can use google forms
+    - [x] can Prolific support context word ordering in template
+- [x] how to estimate pay - do we set a max paid time and they only get money if they complete the survey?
+- [x] how to decide which actions and contexts from normbank to include in survey? for pilot want 5 actions w 20 contexts
