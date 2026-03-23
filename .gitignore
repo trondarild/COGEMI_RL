@@ -213,6 +213,10 @@ __marimo__/
 .Rhistory
 *.R
 
+# Embedding cache (large, re-generated automatically)
+data/normbank_embeddings.npy
+data/normbank_behavior_index.json
+
 # Raw / large data files (download separately - not stored in repo)
 data/NormBank.csv
 data/NormBank.xlsx

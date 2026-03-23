@@ -36,7 +36,7 @@
 - [x] write out to csv files the cogemi versions of normbank, scruples, aesops datasets if not already done
 - [ ] semantic action clustering (LLM normalisation of raw SCRUPLES action strings)
 - [ ] SCRUPLES Dilemmas — defer (pairwise format needs Bradley-Terry or similar)
-- [ ] normbank: cluster unique actions
+- [x] normbank: cluster unique actions
 ### Morals from childrens books
  - [x] research the possibility to download free childrens books with moral content from online repositories
  - [x] download a free children's book with moral content
