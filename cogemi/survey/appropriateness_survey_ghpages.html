@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<!--
+  appropriateness_survey_ghpages.html
+  Static survey for GitHub Pages.  Responses are saved to Supabase.
+  Scenarios and labels are embedded directly — no backend needed for loading.
+
+  Setup:
+    1. Create a free Supabase project at https://supabase.com
+    2. Run the SQL in appropriateness_survey_supabase_setup.sql to create the
+       responses table and RLS policy.
+    3. Copy your Project URL and anon/public key from
+       Project Settings → API and paste them as SUPABASE_URL / SUPABASE_ANON_KEY.
+    4. Commit this file to the gh-pages branch (or docs/ folder) of your repo.
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Social Appropriateness Study</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f5f5f5;
+      color: #222;
+      min-height: 100vh;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 2rem 1rem;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+      padding: 2rem;
+      max-width: 640px;
+      width: 100%;
+    }
+
+    h1 { font-size: 1.4rem; margin-bottom: 1rem; }
+    h2 { font-size: 1.1rem; margin-bottom: 0.75rem; color: #444; }
+    p  { line-height: 1.6; margin-bottom: 0.75rem; color: #333; }
+
+    .progress-bar {
+      height: 6px;
+      background: #e0e0e0;
+      border-radius: 3px;
+      margin-bottom: 1.5rem;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: #4a90d9;
+      border-radius: 3px;
+      transition: width 0.3s ease;
+    }
+
+    .scenario-text {
+      font-size: 1.05rem;
+      line-height: 1.65;
+      background: #f9f9f9;
+      border-left: 4px solid #4a90d9;
+      padding: 1rem 1.25rem;
+      border-radius: 0 6px 6px 0;
+      margin-bottom: 1.5rem;
+    }
+
+    .question { font-weight: 600; margin-bottom: 1rem; }
+
+    .response-buttons { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+
+    .response-btn {
+      flex: 1;
+      min-width: 120px;
+      padding: 0.75rem 1rem;
+      border: 2px solid #ccc;
+      border-radius: 8px;
+      background: #fff;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .response-btn:hover   { border-color: #4a90d9; background: #eaf2fb; }
+    .response-btn.selected{ border-color: #4a90d9; background: #4a90d9; color: #fff; }
+
+    .btn-primary {
+      display: block;
+      width: 100%;
+      padding: 0.85rem;
+      background: #4a90d9;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 1.5rem;
+      transition: background 0.15s;
+    }
+    .btn-primary:hover    { background: #3578c0; }
+    .btn-primary:disabled { background: #aaa; cursor: not-allowed; }
+
+    label { display: block; margin-bottom: 0.4rem; font-weight: 500; }
+    input, select {
+      width: 100%;
+      padding: 0.55rem 0.75rem;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      margin-bottom: 1rem;
+    }
+
+    .field-row { display: flex; gap: 1rem; }
+    .field-row > div { flex: 1; }
+
+    .hidden { display: none; }
+    .small  { font-size: 0.85rem; color: #666; }
+
+    .status-msg { margin-top: 1rem; color: #c0392b; font-size: 0.9rem; min-height: 1.2em; }
+    .spinner {
+      display: inline-block;
+      width: 18px; height: 18px;
+      border: 3px solid #ccc;
+      border-top-color: #4a90d9;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+      margin-right: 0.4rem;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+<div class="card">
+
+  <!-- ===== CONSENT PAGE ===== -->
+  <div id="page-consent">
+    <h1>Social Appropriateness Study</h1>
+    <p>Thank you for taking part. This study investigates how people judge the social appropriateness of everyday actions.</p>
+    <p>You will read <strong>~27 short vignettes</strong> describing everyday situations and rate how socially appropriate the action is on a 3-point scale. The study takes approximately <strong>8 minutes</strong>.</p>
+    <p><strong>Your data:</strong> Responses are stored securely and linked only to your Prolific ID, which will be removed from the analysis dataset after payment. Participation is voluntary; you may withdraw at any time.</p>
+    <p class="small">This research is conducted by [Institution]. If you have questions, contact [email].</p>
+
+    <div style="margin-top:1.25rem">
+      <label>
+        <input type="checkbox" id="consent-check" style="width:auto;margin-right:0.5rem">
+        I have read the information above and I consent to participate.
+      </label>
+    </div>
+
+    <div style="margin-top:1rem">
+      <label for="lang-select">Preferred language</label>
+      <select id="lang-select">
+        <option value="en">English</option>
+        <option value="fr">Français</option>
+      </select>
+    </div>
+
+    <button class="btn-primary" onclick="startDemographics()">Continue</button>
+    <div class="status-msg" id="status-consent"></div>
+  </div>
+
+  <!-- ===== DEMOGRAPHICS PAGE ===== -->
+  <div id="page-demographics" class="hidden">
+    <h1>About you</h1>
+    <p class="small" style="margin-bottom:1rem">This information helps us understand variation across groups. All fields are required.</p>
+
+    <label for="prolific-id">Prolific ID</label>
+    <input type="text" id="prolific-id" placeholder="e.g. 5f3c2a...">
+
+    <div class="field-row">
+      <div>
+        <label for="age">Age</label>
+        <input type="number" id="age" min="18" max="99" placeholder="e.g. 34">
+      </div>
+      <div>
+        <label for="gender">Gender</label>
+        <select id="gender">
+          <option value="">-- select --</option>
+          <option>Woman</option>
+          <option>Man</option>
+          <option>Non-binary / third gender</option>
+          <option>Prefer not to say</option>
+        </select>
+      </div>
+    </div>
+
+    <label for="country">Country of origin</label>
+    <input type="text" id="country" placeholder="e.g. United Kingdom">
+
+    <label for="first-language">First language</label>
+    <input type="text" id="first-language" placeholder="e.g. English">
+
+    <button class="btn-primary" id="btn-start" onclick="startSurvey()">Start survey</button>
+    <div class="status-msg" id="status-demo"></div>
+  </div>
+
+  <!-- ===== SURVEY PAGE ===== -->
+  <div id="page-survey" class="hidden">
+    <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+    <h2 id="scenario-counter">Situation 1 of 27</h2>
+    <div class="scenario-text" id="scenario-text">Loading…</div>
+    <p class="question" id="question-text"></p>
+    <div class="response-buttons" id="response-buttons"></div>
+    <button class="btn-primary" id="btn-next" disabled onclick="nextScenario()">Next</button>
+    <div class="status-msg" id="status-survey"></div>
+  </div>
+
+  <!-- ===== COMPLETION PAGE ===== -->
+  <div id="page-done" class="hidden">
+    <h1>Thank you!</h1>
+    <p>You have completed the study. Your responses have been recorded.</p>
+    <p>Please return to Prolific and use the completion code: <strong id="completion-code" style="font-size:1.2rem"></strong></p>
+  </div>
+
+</div>
+
+<script>
+// ---------------------------------------------------------------------------
+// CONFIG — paste your Supabase project URL and anon key here
+// ---------------------------------------------------------------------------
+var SUPABASE_URL      = "https://bcrssdaahemdueuqnnbt.supabase.co";
+var SUPABASE_ANON_KEY = "sb_publishable_Rm0HnRFPxHraszzsp9bjkA_g2JMCkd-";
+var COMPLETION_CODE   = "COGEMI2025"; // replace with your Prolific completion code
+
+// ---------------------------------------------------------------------------
+// Scenario pool and response labels (embedded — no network call needed)
+// ---------------------------------------------------------------------------
+var SCENARIO_POOL = [
+  { id: "sa_cutinline_supermarket",     en: "Someone walks past a queue of people and goes straight to the front at the supermarket checkout.", fr: "Quelqu'un dépasse la file et passe directement à la caisse du supermarché." },
+  { id: "sa_cutinline_cinema",          en: "Someone pushes in front of others waiting to buy tickets at the cinema.", fr: "Quelqu'un s'insère devant les autres dans la file d'attente au cinéma." },
+  { id: "sa_cutinline_busstop",         en: "Someone jumps the queue at a busy bus stop, boarding before people who have waited longer.", fr: "Quelqu'un grille la priorité à un arrêt de bus bondé." },
+  { id: "sa_cutinline_emergency",       en: "Someone who is visibly unwell asks to move to the front of the queue at a pharmacy.", fr: "Une personne visiblement malade demande à passer devant dans la file d'attente à la pharmacie." },
+  { id: "sa_cutinline_border",          en: "A traveller with a connecting flight in 20 minutes asks to move ahead in the passport control queue.", fr: "Un voyageur avec une correspondance dans 20 minutes demande à passer devant au contrôle des passeports." },
+  { id: "sa_holdoor_office",            en: "Someone holds the door open for a colleague directly behind them at the office entrance.", fr: "Quelqu'un tient la porte à un collègue juste derrière lui à l'entrée du bureau." },
+  { id: "sa_holdoor_elevator",          en: "Someone holds the elevator for a person running toward it from across the lobby.", fr: "Quelqu'un retient l'ascenseur pour quelqu'un qui court depuis l'autre bout du hall." },
+  { id: "sa_holdoor_shop",              en: "Someone holds the door open for a stranger carrying heavy shopping bags.", fr: "Quelqu'un tient la porte à un inconnu chargé de sacs de courses." },
+  { id: "sa_holdoor_street",            en: "Someone holds a heavy gate open for a cyclist they don't know on the street.", fr: "Quelqu'un maintient un portail pour un cycliste inconnu dans la rue." },
+  { id: "sa_holdoor_rain",              en: "Someone stands in the rain for a full minute holding a door because a person is still far away.", fr: "Quelqu'un reste sous la pluie pendant une minute entière à tenir la porte alors que la personne est encore loin." },
+  { id: "sa_speakloud_library",         en: "Someone takes a phone call and speaks at normal conversational volume in a quiet library.", fr: "Quelqu'un répond à un appel et parle normalement dans une bibliothèque silencieuse." },
+  { id: "sa_speakloud_cafe",            en: "Someone has a loud, laughing conversation on their phone in a busy café.", fr: "Quelqu'un rit et parle fort au téléphone dans un café animé." },
+  { id: "sa_speakloud_restaurant",      en: "Someone speaks so loudly on a call that nearby diners at a restaurant can hear every word.", fr: "Quelqu'un parle si fort au téléphone dans un restaurant que les clients voisins entendent tout." },
+  { id: "sa_speakloud_cinema",          en: "Someone narrates the film to their companion in a normal speaking voice during a screening.", fr: "Quelqu'un commente le film à voix normale pendant une projection." },
+  { id: "sa_speakloud_publictransport", en: "Someone listens to music without headphones on a busy commuter train.", fr: "Quelqu'un écoute de la musique sans écouteurs dans un train bondé." },
+  { id: "sa_phonetable_family_dinner",  en: "Someone scrolls through their phone throughout a family dinner without joining the conversation.", fr: "Quelqu'un fait défiler son téléphone tout au long d'un dîner de famille sans participer à la conversation." },
+  { id: "sa_phonetable_date",           en: "Someone checks their phone several times while on a first date at a restaurant.", fr: "Quelqu'un vérifie son téléphone plusieurs fois lors d'un premier rendez-vous au restaurant." },
+  { id: "sa_phonetable_meeting",        en: "Someone replies to messages on their phone during a work meeting.", fr: "Quelqu'un répond à des messages sur son téléphone pendant une réunion de travail." },
+  { id: "sa_phonetable_funeral",        en: "Someone silently reads messages on their phone during a funeral reception.", fr: "Quelqu'un lit silencieusement des messages sur son téléphone lors d'une réception funèbre." },
+  { id: "sa_phonetable_cafe",           en: "Someone places their phone face-up on the café table but does not look at it during a conversation.", fr: "Quelqu'un pose son téléphone face visible sur la table au café mais ne le regarde pas pendant la conversation." },
+  { id: "sa_littering_park",            en: "Someone drops an empty crisp packet on the ground in a public park.", fr: "Quelqu'un jette un paquet de chips vide par terre dans un parc public." },
+  { id: "sa_littering_beach",           en: "Someone leaves their picnic rubbish on the beach when they leave.", fr: "Quelqu'un laisse ses déchets de pique-nique sur la plage en partant." },
+  { id: "sa_littering_street",          en: "Someone drops a cigarette butt on the pavement rather than using a bin.", fr: "Quelqu'un jette un mégot sur le trottoir plutôt que de le mettre à la poubelle." },
+  { id: "sa_littering_publictransport", en: "Someone leaves a newspaper on their seat when getting off the bus.", fr: "Quelqu'un laisse un journal sur son siège en descendant du bus." },
+  { id: "sa_littering_forest",          en: "Someone buries their food waste in the forest while hiking and leaves no trace on the surface.", fr: "Quelqu'un enfouit ses déchets alimentaires dans la forêt pendant une randonnée sans laisser de trace en surface." },
+  { id: "sa_ignoregreet_office",        en: "A colleague says good morning and the person walks past without responding.", fr: "Un collègue dit bonjour et la personne passe sans répondre." },
+  { id: "sa_ignoregreet_neighborhood",  en: "A neighbour waves hello and the person pretends not to see them.", fr: "Un voisin fait un signe de la main et la personne fait semblant de ne pas le voir." },
+  { id: "sa_ignoregreet_gym",           en: "A regular gym acquaintance greets someone and they put their headphones on without acknowledging them.", fr: "Une connaissance habituelle de la salle de sport salue quelqu'un qui met ses écouteurs sans lui répondre." },
+  { id: "sa_ignoregreet_elevator",      en: "Someone steps into an elevator, makes eye contact with another person already inside, and says nothing.", fr: "Quelqu'un entre dans un ascenseur, croise le regard de l'autre personne et ne dit rien." },
+  { id: "sa_ignoregreet_party",         en: "A person at a party ignores someone who introduces themselves and turns away to talk to someone else.", fr: "Une personne à une fête ignore quelqu'un qui se présente et se retourne pour parler à quelqu'un d'autre." },
+  { id: "sa_offerhelp_directions",      en: "Someone overhears a tourist looking confused and offers directions unprompted.", fr: "Quelqu'un entend un touriste perdu et lui propose spontanément de l'aider." },
+  { id: "sa_offerhelp_grocerybags",     en: "Someone offers to carry an elderly person's heavy grocery bags to their car.", fr: "Quelqu'un propose de porter les lourds sacs de course d'une personne âgée jusqu'à sa voiture." },
+  { id: "sa_offerhelp_door",            en: "Someone rushes ahead to open a door for a person in a wheelchair.", fr: "Quelqu'un se dépêche d'ouvrir une porte à une personne en fauteuil roulant." },
+  { id: "sa_offerhelp_crying",          en: "A stranger sitting nearby is crying quietly; someone touches their arm and asks if they are okay.", fr: "Un inconnu assis à côté pleure silencieusement ; quelqu'un lui touche le bras et lui demande si ça va." },
+  { id: "sa_offerhelp_fallen",          en: "Someone falls on the street and a passer-by immediately stops to help them up.", fr: "Quelqu'un tombe dans la rue et un passant s'arrête immédiatement pour l'aider à se relever." },
+  { id: "sa_personalspace_queue",       en: "Someone stands very close behind the person in front of them in a queue, almost touching.", fr: "Quelqu'un se tient très près derrière la personne devant lui dans une file, presque en contact." },
+  { id: "sa_personalspace_elevator",    en: "Someone stands in the centre of an empty elevator, leaving only a small space for another person who enters.", fr: "Quelqu'un se place au centre d'un ascenseur vide, laissant peu de place à la personne qui entre." },
+  { id: "sa_personalspace_emptybus",    en: "Someone chooses to sit directly next to a stranger on an otherwise empty bus.", fr: "Quelqu'un choisit de s'asseoir juste à côté d'un inconnu dans un bus autrement vide." },
+  { id: "sa_personalspace_bench",       en: "Someone sits at the far end of a park bench to maintain distance from the only other person there.", fr: "Quelqu'un s'assoit à l'autre bout d'un banc de parc pour maintenir une distance avec l'autre personne." },
+  { id: "sa_personalspace_waiting_room",en: "Someone sits directly next to a person in a waiting room when many other seats are available.", fr: "Quelqu'un s'assoit juste à côté d'une personne dans une salle d'attente alors que beaucoup d'autres sièges sont libres." }
+];
+
+var ATTENTION_CHECKS = [
+  { id: "sa_check_appropriate",   en: "Someone holds the door open for the person directly behind them.", fr: "Quelqu'un tient la porte à la personne juste derrière lui." },
+  { id: "sa_check_inappropriate", en: "Someone pushes past everyone waiting and barges to the front of the queue at a hospital reception.", fr: "Quelqu'un bouscule tout le monde et se place en tête de file à l'accueil d'un hôpital." }
+];
+
+var RESPONSE_LABELS = {
+  en: ["Inappropriate", "Neutral", "Appropriate"],
+  fr: ["Inapproprié",   "Neutre",  "Approprié"]
+};
+var RESPONSE_VALUES = ["Inappropriate", "Neutral", "Appropriate"];
+
+var QUESTIONS = {
+  en: "How socially appropriate is the action described?",
+  fr: "Dans quelle mesure l'action décrite est-elle socialement appropriée ?"
+};
+
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
+var state = {
+  lang:       "en",
+  prolificId: "",
+  age:        "",
+  gender:     "",
+  country:    "",
+  firstLang:  "",
+  scenarios:  [],
+  current:    0,
+  selected:   null,
+  labels:     []
+};
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function show(id) {
+  ["page-consent", "page-demographics", "page-survey", "page-done"].forEach(function(p) {
+    document.getElementById(p).classList.add("hidden");
+  });
+  document.getElementById(id).classList.remove("hidden");
+}
+
+function setStatus(elId, msg) {
+  document.getElementById(elId).textContent = msg;
+}
+
+function shuffle(arr) {
+  var a = arr.slice();
+  for (var i = a.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var tmp = a[i]; a[i] = a[j]; a[j] = tmp;
+  }
+  return a;
+}
+
+function buildSession(lang) {
+  var pool = shuffle(SCENARIO_POOL);
+  pool.splice(7,  0, ATTENTION_CHECKS[0]);
+  pool.splice(17, 0, ATTENTION_CHECKS[1]);
+  return pool.map(function(s) {
+    return { id: s.id, text: lang === "fr" ? s.fr : s.en };
+  });
+}
+
+function buildLabels(lang) {
+  var display = RESPONSE_LABELS[lang] || RESPONSE_LABELS.en;
+  return RESPONSE_VALUES.map(function(v, i) {
+    return { value: v, label: display[i] };
+  });
+}
+
+// POST one row to Supabase REST API.
+function supabaseInsert(row) {
+  return fetch(SUPABASE_URL + "/rest/v1/responses", {
+    method:  "POST",
+    headers: {
+      "apikey":        SUPABASE_ANON_KEY,
+      "Authorization": "Bearer " + SUPABASE_ANON_KEY,
+      "Content-Type":  "application/json",
+      "Prefer":        "return=minimal"
+    },
+    body: JSON.stringify(row)
+  })
+  .then(function(r) {
+    if (!r.ok) return r.text().then(function(t) { throw new Error(t); });
+    return { ok: true };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Page: Consent
+// ---------------------------------------------------------------------------
+
+function startDemographics() {
+  if (!document.getElementById("consent-check").checked) {
+    setStatus("status-consent", "Please tick the consent box to continue.");
+    return;
+  }
+  state.lang = document.getElementById("lang-select").value;
+  setStatus("status-consent", "");
+  show("page-demographics");
+}
+
+// ---------------------------------------------------------------------------
+// Page: Demographics → build session locally, show survey immediately
+// ---------------------------------------------------------------------------
+
+function startSurvey() {
+  var pid = document.getElementById("prolific-id").value.trim();
+  var age = document.getElementById("age").value.trim();
+  var gen = document.getElementById("gender").value;
+  var cty = document.getElementById("country").value.trim();
+  var fl  = document.getElementById("first-language").value.trim();
+
+  if (!pid || !age || !gen || !cty || !fl) {
+    setStatus("status-demo", "Please fill in all fields.");
+    return;
+  }
+
+  state.prolificId = pid;
+  state.age        = age;
+  state.gender     = gen;
+  state.country    = cty;
+  state.firstLang  = fl;
+  state.scenarios  = buildSession(state.lang);
+  state.labels     = buildLabels(state.lang);
+  state.current    = 0;
+
+  show("page-survey");
+  renderScenario();
+}
+
+// ---------------------------------------------------------------------------
+// Survey rendering
+// ---------------------------------------------------------------------------
+
+function renderScenario() {
+  var s     = state.scenarios[state.current];
+  var total = state.scenarios.length;
+
+  document.getElementById("scenario-counter").textContent =
+    "Situation " + (state.current + 1) + " of " + total;
+  document.getElementById("scenario-text").textContent = s.text;
+  document.getElementById("question-text").textContent =
+    QUESTIONS[state.lang] || QUESTIONS.en;
+
+  var pct = Math.round((state.current / total) * 100);
+  document.getElementById("progress-fill").style.width = pct + "%";
+
+  var container = document.getElementById("response-buttons");
+  container.innerHTML = "";
+  state.labels.forEach(function(item) {
+    var btn = document.createElement("button");
+    btn.className = "response-btn";
+    btn.textContent = item.label;
+    btn.onclick = function() { selectResponse(item.value, btn); };
+    container.appendChild(btn);
+  });
+
+  state.selected = null;
+  document.getElementById("btn-next").disabled = true;
+  setStatus("status-survey", "");
+}
+
+function selectResponse(value, btn) {
+  document.querySelectorAll(".response-btn").forEach(function(b) {
+    b.classList.remove("selected");
+  });
+  btn.classList.add("selected");
+  state.selected = value;
+  document.getElementById("btn-next").disabled = false;
+}
+
+// ---------------------------------------------------------------------------
+// Submit response to Supabase, advance to next scenario
+// ---------------------------------------------------------------------------
+
+function nextScenario() {
+  if (!state.selected) return;
+
+  var scenarioId = state.scenarios[state.current].id;
+  var btnNext    = document.getElementById("btn-next");
+  btnNext.disabled = true;
+  btnNext.innerHTML = '<span class="spinner"></span>Saving…';
+
+  supabaseInsert({
+    prolific_id: state.prolificId,
+    scenario_id: scenarioId,
+    response:    state.selected,
+    age:         state.age,
+    gender:      state.gender,
+    country:     state.country,
+    language:    state.lang
+  })
+  .then(function() {
+    btnNext.textContent = "Next";
+    state.current++;
+    if (state.current >= state.scenarios.length) {
+      document.getElementById("completion-code").textContent = COMPLETION_CODE;
+      show("page-done");
+    } else {
+      renderScenario();
+    }
+  })
+  .catch(function(err) {
+    btnNext.textContent = "Next";
+    setStatus("status-survey", "Save error — please try again. (" + err.message + ")");
+    btnNext.disabled = false;
+  });
+}
+</script>
+</body>
+</html>
