@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<!--
+  role_survey_ghpages.html
+  Social Appropriateness Study — Role Perspectives
+  Static survey for GitHub Pages. Responses saved to Supabase.
+
+  Role assignment via URL param:
+    ?role=agent    — participant plays the person performing the action
+    ?role=target   — participant plays the person the action affects
+    ?role=observer — participant plays a neutral bystander
+    (omitted)      — role is randomly assigned
+
+  Setup:
+    1. Run role_survey_supabase_setup.sql (or the combined setup file) in Supabase.
+    2. Paste your SUPABASE_URL and SUPABASE_ANON_KEY below.
+    3. Set COMPLETION_CODE to your Prolific completion code.
+    4. Commit to gh-pages branch / docs/ folder.
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Social Appropriateness Study — Role Perspectives</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f0f4f8; color: #222;
+      min-height: 100vh; display: flex;
+      align-items: flex-start; justify-content: center;
+      padding: 2rem 1rem;
+    }
+    .card {
+      background: #fff; border-radius: 10px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+      padding: 2rem; max-width: 660px; width: 100%;
+    }
+    h1 { font-size: 1.4rem; margin-bottom: 1rem; }
+    h2 { font-size: 1.1rem; margin-bottom: 0.75rem; color: #444; }
+    p  { line-height: 1.6; margin-bottom: 0.75rem; color: #333; }
+    .progress-bar { height: 6px; background: #e0e0e0; border-radius: 3px; margin-bottom: 1.5rem; overflow: hidden; }
+    .progress-fill { height: 100%; background: #5a7fc1; border-radius: 3px; transition: width 0.3s ease; }
+    .scenario-text {
+      font-size: 1.05rem; line-height: 1.65;
+      background: #f9f9f9; border-left: 4px solid #5a7fc1;
+      padding: 1rem 1.25rem; border-radius: 0 6px 6px 0;
+      margin-bottom: 1rem;
+    }
+    .role-card {
+      display: flex; align-items: center; gap: 0.6rem;
+      background: #eef2fb; border: 1px solid #c5d0ee;
+      border-radius: 8px; padding: 0.65rem 1rem;
+      font-size: 0.9rem; margin-bottom: 1rem; color: #2a3d8a;
+    }
+    .role-card .role-icon { font-size: 1.2rem; }
+    .question { font-weight: 600; margin-bottom: 1rem; }
+    .response-buttons { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+    .response-btn {
+      flex: 1; min-width: 100px;
+      padding: 0.75rem 1rem;
+      border: 2px solid #ccc; border-radius: 8px;
+      background: #fff; font-size: 0.95rem; cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .response-btn:hover    { border-color: #5a7fc1; background: #eef2fb; }
+    .response-btn.selected { border-color: #5a7fc1; background: #5a7fc1; color: #fff; }
+    .btn-primary {
+      display: block; width: 100%;
+      padding: 0.85rem; background: #5a7fc1; color: #fff;
+      border: none; border-radius: 8px;
+      font-size: 1rem; font-weight: 600; cursor: pointer;
+      margin-top: 1.5rem; transition: background 0.15s;
+    }
+    .btn-primary:hover    { background: #4166a8; }
+    .btn-primary:disabled { background: #aaa; cursor: not-allowed; }
+    label { display: block; margin-bottom: 0.4rem; font-weight: 500; }
+    input, select {
+      width: 100%; padding: 0.55rem 0.75rem;
+      border: 1px solid #ccc; border-radius: 6px;
+      font-size: 0.95rem; margin-bottom: 1rem;
+    }
+    .field-row { display: flex; gap: 1rem; }
+    .field-row > div { flex: 1; }
+    .hidden  { display: none; }
+    .small   { font-size: 0.85rem; color: #666; }
+    .status-msg { color: #c0392b; font-size: 0.9rem; margin-top: 0.5rem; min-height: 1.2em; }
+    .role-badge {
+      display: inline-block; background: #5a7fc1; color: #fff;
+      padding: 0.2rem 0.7rem; border-radius: 20px;
+      font-size: 0.85rem; font-weight: 600; margin-bottom: 1rem;
+    }
+    .spinner {
+      display: inline-block; width: 16px; height: 16px;
+      border: 3px solid #ccc; border-top-color: #5a7fc1;
+      border-radius: 50%; animation: spin 0.7s linear infinite;
+      vertical-align: middle; margin-right: 0.4rem;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    /* word-click phase */
+    .word-token { cursor: pointer; display: inline; border-radius: 3px; padding: 1px 3px; transition: background 0.12s; }
+    .word-token:hover  { background: #e8eef8; }
+    .word-token.w-sel  { background: #5a7fc1; color: #fff; border-radius: 3px; }
+    .click-rank { font-size: 0.62rem; vertical-align: super; font-weight: 700; margin-left: 1px; }
+    .context-prompt { font-size: 0.92rem; color: #555; margin-bottom: 0.6rem; font-style: italic; }
+  </style>
+</head>
+<body>
+<div class="card">
+
+  <!-- CONSENT -->
+  <div id="page-consent">
+    <h1 id="ui-consent-title"></h1>
+    <p id="ui-consent-p1"></p>
+    <p id="ui-consent-p2"></p>
+    <p id="ui-consent-p3"></p>
+    <p class="small" id="ui-consent-p4"></p>
+    <div style="margin-top:1.25rem">
+      <label><input type="checkbox" id="consent-check" style="width:auto;margin-right:0.5rem">
+        <span id="ui-consent-label"></span></label>
+    </div>
+    <div style="margin-top:1rem">
+      <label for="lang-select" id="ui-lang-label"></label>
+      <select id="lang-select" onchange="translateUI(this.value)">
+        <option value="en">English</option>
+        <option value="fr">Français</option>
+      </select>
+    </div>
+    <button class="btn-primary" id="ui-btn-consent" onclick="startDemographics()"></button>
+    <div class="status-msg" id="err-consent"></div>
+  </div>
+
+  <!-- ROLE BRIEFING -->
+  <div id="page-role" class="hidden">
+    <h1 id="ui-role-title"></h1>
+    <p id="ui-role-intro"></p>
+    <div class="role-card">
+      <span class="role-icon" id="role-icon"></span>
+      <div>
+        <div id="ui-role-label-line"></div>
+        <div class="small" id="ui-role-desc"></div>
+      </div>
+    </div>
+    <p id="ui-role-instruction"></p>
+    <button class="btn-primary" id="ui-btn-role" onclick="show('page-demographics')"></button>
+  </div>
+
+  <!-- DEMOGRAPHICS -->
+  <div id="page-demographics" class="hidden">
+    <h1 id="ui-demo-title"></h1>
+    <p class="small" style="margin-bottom:1rem" id="ui-demo-subtitle"></p>
+    <label for="prolific-id" id="ui-label-prolific"></label>
+    <input type="text" id="prolific-id" placeholder="e.g. 5f3c2a...">
+    <div class="field-row">
+      <div>
+        <label for="age" id="ui-label-age"></label>
+        <input type="number" id="age" min="18" max="99" placeholder="e.g. 34">
+      </div>
+      <div>
+        <label for="gender" id="ui-label-gender"></label>
+        <select id="gender">
+          <option value=""          id="ui-gender-select"></option>
+          <option value="Woman"     id="ui-gender-woman"></option>
+          <option value="Man"       id="ui-gender-man"></option>
+          <option value="Nonbinary" id="ui-gender-nonbinary"></option>
+          <option value="Prefer"    id="ui-gender-prefer"></option>
+        </select>
+      </div>
+    </div>
+    <label for="country" id="ui-label-country"></label>
+    <input type="text" id="country" placeholder="e.g. United Kingdom">
+    <label for="first-language" id="ui-label-firstlang"></label>
+    <input type="text" id="first-language" placeholder="e.g. English">
+    <button class="btn-primary" id="ui-btn-start" onclick="startSurvey()"></button>
+    <div class="status-msg" id="err-demo"></div>
+  </div>
+
+  <!-- SURVEY -->
+  <div id="page-survey" class="hidden">
+    <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+    <h2 id="scenario-counter"></h2>
+    <div id="role-badge-survey" class="role-badge"></div>
+    <div class="scenario-text" id="scenario-text"></div>
+    <div class="role-card" id="role-context-card">
+      <span class="role-icon" id="survey-role-icon"></span>
+      <span id="survey-role-context"></span>
+    </div>
+    <p class="question" id="question-text"></p>
+    <div class="response-buttons" id="response-buttons"></div>
+    <!-- word-click phase (shown after rating) -->
+    <div id="context-phase" class="hidden">
+      <p class="context-prompt" id="ui-context-prompt"></p>
+      <div class="scenario-text" id="scenario-text-ctx" style="line-height:2.2"></div>
+      <p class="small" style="margin-top:0.6rem;color:#999" id="ui-context-skip"></p>
+    </div>
+    <button class="btn-primary" id="btn-next" disabled onclick="nextScenario()"></button>
+    <div class="status-msg" id="err-survey"></div>
+  </div>
+
+  <!-- COMPLETION -->
+  <div id="page-done" class="hidden">
+    <h1 id="ui-done-title"></h1>
+    <p id="ui-done-p1"></p>
+    <p id="ui-done-p2"> <strong id="ui-done-completion-code" style="font-size:1.2rem"></strong></p>
+    <p class="small" id="ui-done-p3"></p>
+  </div>
+
+</div>
+
+<script>
+// ---------------------------------------------------------------------------
+// CONFIG
+// ---------------------------------------------------------------------------
+var SUPABASE_URL      = "https://bcrssdaahemdueuqnnbt.supabase.co";
+var SUPABASE_ANON_KEY = "sb_publishable_Rm0HnRFPxHraszzsp9bjkA_g2JMCkd-";
+var COMPLETION_CODE   = "COGEMI2025"; // replace with your Prolific completion code
+
+// ---------------------------------------------------------------------------
+// Scenario pool — social appropriateness with agent / target roles
+// ---------------------------------------------------------------------------
+var SCENARIO_POOL = [
+  // cutinline
+  { id:"sa_cutinline_supermarket",     en:"Someone walks past a queue of people and goes straight to the front at the supermarket checkout.", fr:"Quelqu'un dépasse la file et passe directement à la caisse du supermarché.",                          agent_role:"queue-jumper",   target_role:"waiting customer" },
+  { id:"sa_cutinline_cinema",          en:"Someone pushes in front of others waiting to buy tickets at the cinema.",                          fr:"Quelqu'un s'insère devant les autres dans la file d'attente au cinéma.",                              agent_role:"queue-jumper",   target_role:"waiting customer" },
+  { id:"sa_cutinline_busstop",         en:"Someone jumps the queue at a busy bus stop, boarding before people who have waited longer.",        fr:"Quelqu'un grille la priorité à un arrêt de bus bondé.",                                              agent_role:"queue-jumper",   target_role:"waiting passenger"},
+  { id:"sa_cutinline_emergency",       en:"Someone who is visibly unwell asks to move to the front of the queue at a pharmacy.",               fr:"Une personne visiblement malade demande à passer devant dans la file d'attente à la pharmacie.",      agent_role:"unwell person",  target_role:"waiting customer" },
+  { id:"sa_cutinline_border",          en:"A traveller with a connecting flight in 20 minutes asks to move ahead in the passport control queue.",fr:"Un voyageur avec une correspondance dans 20 minutes demande à passer devant au contrôle des passeports.",agent_role:"traveller",     target_role:"waiting passenger"},
+  // holdoor
+  { id:"sa_holdoor_office",            en:"Someone holds the door open for a colleague directly behind them at the office entrance.",           fr:"Quelqu'un tient la porte à un collègue juste derrière lui à l'entrée du bureau.",                    agent_role:"door-holder",    target_role:"colleague"        },
+  { id:"sa_holdoor_elevator",          en:"Someone holds the elevator for a person running toward it from across the lobby.",                   fr:"Quelqu'un retient l'ascenseur pour quelqu'un qui court depuis l'autre bout du hall.",                 agent_role:"door-holder",    target_role:"person arriving"  },
+  { id:"sa_holdoor_shop",              en:"Someone holds the door open for a stranger carrying heavy shopping bags.",                           fr:"Quelqu'un tient la porte à un inconnu chargé de sacs de courses.",                                   agent_role:"door-holder",    target_role:"shopper"          },
+  { id:"sa_holdoor_street",            en:"Someone holds a heavy gate open for a cyclist they don't know on the street.",                       fr:"Quelqu'un maintient un portail pour un cycliste inconnu dans la rue.",                               agent_role:"door-holder",    target_role:"cyclist"          },
+  { id:"sa_holdoor_rain",              en:"Someone stands in the rain for a full minute holding a door because a person is still far away.",    fr:"Quelqu'un reste sous la pluie pendant une minute entière à tenir la porte alors que la personne est encore loin.", agent_role:"door-holder", target_role:"approaching person"},
+  // speakloud
+  { id:"sa_speakloud_library",         en:"Someone takes a phone call and speaks at normal conversational volume in a quiet library.",          fr:"Quelqu'un répond à un appel et parle normalement dans une bibliothèque silencieuse.",                agent_role:"phone caller",   target_role:"library patron"   },
+  { id:"sa_speakloud_cafe",            en:"Someone has a loud, laughing conversation on their phone in a busy café.",                           fr:"Quelqu'un rit et parle fort au téléphone dans un café animé.",                                       agent_role:"phone caller",   target_role:"nearby patron"    },
+  { id:"sa_speakloud_restaurant",      en:"Someone speaks so loudly on a call that nearby diners at a restaurant can hear every word.",         fr:"Quelqu'un parle si fort au téléphone dans un restaurant que les clients voisins entendent tout.",     agent_role:"phone caller",   target_role:"nearby diner"     },
+  { id:"sa_speakloud_cinema",          en:"Someone narrates the film to their companion in a normal speaking voice during a screening.",         fr:"Quelqu'un commente le film à voix normale pendant une projection.",                                  agent_role:"talker",         target_role:"nearby viewer"    },
+  { id:"sa_speakloud_publictransport", en:"Someone listens to music without headphones on a busy commuter train.",                              fr:"Quelqu'un écoute de la musique sans écouteurs dans un train bondé.",                                 agent_role:"music listener", target_role:"fellow passenger" },
+  // phonetable
+  { id:"sa_phonetable_family_dinner",  en:"Someone scrolls through their phone throughout a family dinner without joining the conversation.",   fr:"Quelqu'un fait défiler son téléphone tout au long d'un dîner de famille sans participer à la conversation.", agent_role:"phone user", target_role:"family member"  },
+  { id:"sa_phonetable_date",           en:"Someone checks their phone several times while on a first date at a restaurant.",                    fr:"Quelqu'un vérifie son téléphone plusieurs fois lors d'un premier rendez-vous au restaurant.",          agent_role:"phone user",     target_role:"date"             },
+  { id:"sa_phonetable_meeting",        en:"Someone replies to messages on their phone during a work meeting.",                                  fr:"Quelqu'un répond à des messages sur son téléphone pendant une réunion de travail.",                   agent_role:"phone user",     target_role:"colleague"        },
+  { id:"sa_phonetable_funeral",        en:"Someone silently reads messages on their phone during a funeral reception.",                         fr:"Quelqu'un lit silencieusement des messages sur son téléphone lors d'une réception funèbre.",          agent_role:"phone user",     target_role:"mourner"          },
+  { id:"sa_phonetable_cafe",           en:"Someone places their phone face-up on the café table but does not look at it during a conversation.",fr:"Quelqu'un pose son téléphone face visible sur la table au café mais ne le regarde pas pendant la conversation.", agent_role:"phone user", target_role:"companion"},
+  // littering
+  { id:"sa_littering_park",            en:"Someone drops an empty crisp packet on the ground in a public park.",                                fr:"Quelqu'un jette un paquet de chips vide par terre dans un parc public.",                              agent_role:"person",         target_role:"park-goer"        },
+  { id:"sa_littering_beach",           en:"Someone leaves their picnic rubbish on the beach when they leave.",                                  fr:"Quelqu'un laisse ses déchets de pique-nique sur la plage en partant.",                               agent_role:"person",         target_role:"beach-goer"       },
+  { id:"sa_littering_street",          en:"Someone drops a cigarette butt on the pavement rather than using a bin.",                            fr:"Quelqu'un jette un mégot sur le trottoir plutôt que de le mettre à la poubelle.",                    agent_role:"person",         target_role:"pedestrian"       },
+  { id:"sa_littering_publictransport", en:"Someone leaves a newspaper on their seat when getting off the bus.",                                 fr:"Quelqu'un laisse un journal sur son siège en descendant du bus.",                                    agent_role:"passenger",      target_role:"next passenger"   },
+  { id:"sa_littering_forest",          en:"Someone buries their food waste in the forest while hiking and leaves no trace on the surface.",     fr:"Quelqu'un enfouit ses déchets alimentaires dans la forêt pendant une randonnée sans laisser de trace en surface.", agent_role:"hiker", target_role:"fellow hiker"   },
+  // ignoregreet
+  { id:"sa_ignoregreet_office",        en:"A colleague says good morning and the person walks past without responding.",                        fr:"Un collègue dit bonjour et la personne passe sans répondre.",                                        agent_role:"person ignoring",target_role:"greeter"          },
+  { id:"sa_ignoregreet_neighborhood",  en:"A neighbour waves hello and the person pretends not to see them.",                                   fr:"Un voisin fait un signe de la main et la personne fait semblant de ne pas le voir.",                 agent_role:"person ignoring",target_role:"neighbour"         },
+  { id:"sa_ignoregreet_gym",           en:"A regular gym acquaintance greets someone and they put their headphones on without acknowledging them.",fr:"Une connaissance habituelle de la salle de sport salue quelqu'un qui met ses écouteurs sans lui répondre.", agent_role:"person ignoring", target_role:"acquaintance"},
+  { id:"sa_ignoregreet_elevator",      en:"Someone steps into an elevator, makes eye contact with another person already inside, and says nothing.",fr:"Quelqu'un entre dans un ascenseur, croise le regard de l'autre personne et ne dit rien.",       agent_role:"silent person",  target_role:"other person"     },
+  { id:"sa_ignoregreet_party",         en:"A person at a party ignores someone who introduces themselves and turns away to talk to someone else.",fr:"Une personne à une fête ignore quelqu'un qui se présente et se retourne pour parler à quelqu'un d'autre.", agent_role:"person ignoring", target_role:"introducer"},
+  // offerhelp
+  { id:"sa_offerhelp_directions",      en:"Someone overhears a tourist looking confused and offers directions unprompted.",                     fr:"Quelqu'un entend un touriste perdu et lui propose spontanément de l'aider.",                         agent_role:"helper",         target_role:"tourist"          },
+  { id:"sa_offerhelp_grocerybags",     en:"Someone offers to carry an elderly person's heavy grocery bags to their car.",                       fr:"Quelqu'un propose de porter les lourds sacs de course d'une personne âgée jusqu'à sa voiture.",      agent_role:"helper",         target_role:"elderly person"   },
+  { id:"sa_offerhelp_door",            en:"Someone rushes ahead to open a door for a person in a wheelchair.",                                  fr:"Quelqu'un se dépêche d'ouvrir une porte à une personne en fauteuil roulant.",                        agent_role:"helper",         target_role:"wheelchair user"  },
+  { id:"sa_offerhelp_crying",          en:"A stranger sitting nearby is crying quietly; someone touches their arm and asks if they are okay.",  fr:"Un inconnu assis à côté pleure silencieusement ; quelqu'un lui touche le bras et lui demande si ça va.", agent_role:"helper",    target_role:"crying person"    },
+  { id:"sa_offerhelp_fallen",          en:"Someone falls on the street and a passer-by immediately stops to help them up.",                     fr:"Quelqu'un tombe dans la rue et un passant s'arrête immédiatement pour l'aider à se relever.",        agent_role:"helper",         target_role:"fallen person"    },
+  // personalspace
+  { id:"sa_personalspace_queue",       en:"Someone stands very close behind the person in front of them in a queue, almost touching.",          fr:"Quelqu'un se tient très près derrière la personne devant lui dans une file, presque en contact.",   agent_role:"person",         target_role:"person in front"  },
+  { id:"sa_personalspace_elevator",    en:"Someone stands in the centre of an empty elevator, leaving only a small space for another person who enters.",fr:"Quelqu'un se place au centre d'un ascenseur vide, laissant peu de place à la personne qui entre.", agent_role:"person", target_role:"person entering" },
+  { id:"sa_personalspace_emptybus",    en:"Someone chooses to sit directly next to a stranger on an otherwise empty bus.",                      fr:"Quelqu'un choisit de s'asseoir juste à côté d'un inconnu dans un bus autrement vide.",              agent_role:"person",         target_role:"seated stranger"  },
+  { id:"sa_personalspace_bench",       en:"Someone sits at the far end of a park bench to maintain distance from the only other person there.", fr:"Quelqu'un s'assoit à l'autre bout d'un banc de parc pour maintenir une distance avec l'autre personne.", agent_role:"person",  target_role:"bench occupant"   },
+  { id:"sa_personalspace_waiting_room",en:"Someone sits directly next to a person in a waiting room when many other seats are available.",      fr:"Quelqu'un s'assoit juste à côté d'une personne dans une salle d'attente alors que beaucoup d'autres sièges sont libres.", agent_role:"person", target_role:"seated person"}
+];
+
+var ATTENTION_CHECKS = [
+  { id:"sa_check_appropriate",   en:"Someone holds the door open for the person directly behind them.",                                           fr:"Quelqu'un tient la porte à la personne juste derrière lui.",                                          agent_role:"door-holder",  target_role:"person behind",   expected:"Appropriate"   },
+  { id:"sa_check_inappropriate", en:"Someone pushes past everyone waiting and barges to the front of the queue at a hospital reception.",          fr:"Quelqu'un bouscule tout le monde et se place en tête de file à l'accueil d'un hôpital.",             agent_role:"queue-jumper", target_role:"waiting patient", expected:"Inappropriate" }
+];
+
+var SCENARIOS_PER_SESSION = 20;
+
+// ---------------------------------------------------------------------------
+// Response labels
+// ---------------------------------------------------------------------------
+var RESPONSE_LABELS = {
+  en: ["Inappropriate", "Neutral", "Appropriate"],
+  fr: ["Inapproprié",   "Neutre",  "Approprié"]
+};
+var RESPONSE_VALUES = ["Inappropriate", "Neutral", "Appropriate"];
+
+// ---------------------------------------------------------------------------
+// Role configuration
+// ---------------------------------------------------------------------------
+var ROLE_ICONS  = { agent: "🎯", target: "🙋", observer: "👁" };
+var ROLE_LABELS = {
+  en: { agent: "Agent", target: "Target", observer: "Observer" },
+  fr: { agent: "Agent", target: "Cible",  observer: "Observateur" }
+};
+var ROLE_DESCS = {
+  agent:    { en: "The person performing the action",     fr: "La personne qui effectue l'action"          },
+  target:   { en: "The person the action is directed at", fr: "La personne à qui l'action est destinée"    },
+  observer: { en: "A neutral third party",                fr: "Un tiers neutre"                            }
+};
+var ROLE_BRIEFING = {
+  agent: {
+    en: "You will read 20 short scenarios. In each one, <strong>you are the agent</strong> — the person performing the action. You will be asked how appropriate your own action is.",
+    fr: "Vous lirez 20 courtes situations. Dans chacune, <strong>vous êtes l'agent</strong> — la personne qui effectue l'action. Il vous sera demandé dans quelle mesure votre propre action est appropriée."
+  },
+  target: {
+    en: "You will read 20 short scenarios. In each one, <strong>you are the target</strong> — the person the action is directed at. You will be asked how appropriate the action done to/around you is.",
+    fr: "Vous lirez 20 courtes situations. Dans chacune, <strong>vous êtes la cible</strong> — la personne à qui l'action est destinée. Il vous sera demandé dans quelle mesure l'action qui vous est faite est appropriée."
+  },
+  observer: {
+    en: "You will read 20 short scenarios. In each one, <strong>you are an observer</strong> — a neutral third party. You will be asked how appropriate the action is.",
+    fr: "Vous lirez 20 courtes situations. Dans chacune, <strong>vous êtes un observateur</strong> — un tiers neutre. Il vous sera demandé dans quelle mesure l'action est appropriée."
+  }
+};
+var ROLE_CONTEXT_LINES = {
+  agent:    { en: "In this scenario, you are the <strong>{role}</strong>.",              fr: "Dans ce scénario, vous êtes <strong>{role}</strong>."             },
+  target:   { en: "In this scenario, you are the <strong>{role}</strong>.",              fr: "Dans ce scénario, vous êtes <strong>{role}</strong>."             },
+  observer: { en: "You are an <strong>observer</strong> watching this situation unfold.", fr: "Vous êtes un <strong>observateur</strong> qui regarde la situation se dérouler." }
+};
+var ROLE_QUESTIONS = {
+  agent: {
+    en: "You are the {role}. How socially appropriate is your action?",
+    fr: "Vous êtes {role}. Dans quelle mesure votre action est-elle socialement appropriée ?"
+  },
+  target: {
+    en: "You are the {role}. How appropriate is this action directed at/around you?",
+    fr: "Vous êtes {role}. Dans quelle mesure cette action à votre égard est-elle appropriée ?"
+  },
+  observer: {
+    en: "You observe this situation. How appropriate is the {agent}'s behaviour?",
+    fr: "Vous observez cette situation. Dans quelle mesure le comportement de {agent} est-il approprié ?"
+  }
+};
+
+// ---------------------------------------------------------------------------
+// UI text
+// ---------------------------------------------------------------------------
+var SITUATION_LABEL = { en: ["Situation", "of"], fr: ["Situation", "sur"] };
+
+var UI_TEXT = {
+  en: {
+    "consent-title":    "Social Appropriateness Study — Role Perspectives",
+    "consent-p1":       "Thank you for taking part. This study investigates how people judge the social appropriateness of everyday actions from different participant perspectives.",
+    "consent-p2":       "You will read <strong>20 short vignettes</strong> and rate how appropriate each action is. The study takes approximately <strong>8 minutes</strong>.",
+    "consent-p3":       "<strong>Your data:</strong> Responses are stored securely and linked only to your Prolific ID, removed from the analysis dataset after payment. Participation is voluntary; you may withdraw at any time.",
+    "consent-p4":       "This research is conducted by [Institution]. If you have questions, contact [email].",
+    "consent-label":    "I have read the information above and I consent to participate.",
+    "lang-label":       "Preferred language",
+    "btn-consent":      "Continue",
+    "role-title":       "Your role in this study",
+    "btn-role":         "Continue to demographics",
+    "demo-title":       "About you",
+    "demo-subtitle":    "All fields are required.",
+    "label-prolific":   "Prolific ID",
+    "label-age":        "Age",
+    "label-gender":     "Gender",
+    "gender-select":    "-- select --",
+    "gender-woman":     "Woman",
+    "gender-man":       "Man",
+    "gender-nonbinary": "Non-binary / third gender",
+    "gender-prefer":    "Prefer not to say",
+    "label-country":    "Country of origin",
+    "label-firstlang":  "First language",
+    "btn-start":        "Start survey",
+    "btn-next":         "Next",
+    "context-prompt":   "Which word(s) most influenced your judgement? Click them in order of importance. Click again to deselect.",
+    "context-skip":     "Nothing specific? Just click Continue \u2192.",
+    "done-title":       "Thank you!",
+    "done-p1":          "You have completed the study. Your responses have been recorded.",
+    "done-p2":          "Please return to Prolific and use the completion code:",
+    "done-p3":          "If you have any questions about this research, contact [email]."
+  },
+  fr: {
+    "consent-title":    "Étude sur l\u2019appropriation sociale — Perspectives de rôle",
+    "consent-p1":       "Merci de participer. Cette étude examine comment les personnes jugent l\u2019adéquation sociale d\u2019actions quotidiennes selon différentes perspectives.",
+    "consent-p2":       "Vous lirez <strong>20 courtes vignettes</strong> et évaluerez dans quelle mesure chaque action est appropriée. L\u2019étude dure environ <strong>8 minutes</strong>.",
+    "consent-p3":       "<strong>Vos données :</strong> Les réponses sont stockées de manière sécurisée et associées à votre identifiant Prolific, supprimé du jeu de données d\u2019analyse après le paiement. Participation volontaire.",
+    "consent-p4":       "Recherche menée par [Institution]. Pour toute question, contactez [email].",
+    "consent-label":    "J\u2019ai lu les informations ci-dessus et je consens à participer.",
+    "lang-label":       "Langue préférée",
+    "btn-consent":      "Continuer",
+    "role-title":       "Votre rôle dans cette étude",
+    "btn-role":         "Continuer vers les informations personnelles",
+    "demo-title":       "À propos de vous",
+    "demo-subtitle":    "Tous les champs sont obligatoires.",
+    "label-prolific":   "Identifiant Prolific",
+    "label-age":        "Âge",
+    "label-gender":     "Genre",
+    "gender-select":    "-- sélectionner --",
+    "gender-woman":     "Femme",
+    "gender-man":       "Homme",
+    "gender-nonbinary": "Non-binaire / troisième genre",
+    "gender-prefer":    "Préfère ne pas répondre",
+    "label-country":    "Pays d\u2019origine",
+    "label-firstlang":  "Langue maternelle",
+    "btn-start":        "Commencer l\u2019enquête",
+    "btn-next":         "Suivant",
+    "context-prompt":   "Quel(s) mot(s) ont le plus influencé votre jugement ? Cliquez-les par ordre d\u2019importance. Cliquez à nouveau pour désélectionner.",
+    "context-skip":     "Rien de particulier ? Cliquez simplement sur Continuer \u2192.",
+    "done-title":       "Merci !",
+    "done-p1":          "Vous avez terminé l\u2019étude. Vos réponses ont été enregistrées.",
+    "done-p2":          "Veuillez retourner sur Prolific et utiliser le code de completion :",
+    "done-p3":          "Pour toute question sur cette recherche, contactez [email]."
+  }
+};
+
+var ERR_CONSENT = { en: "Please tick the consent box to continue.", fr: "Veuillez cocher la case de consentement pour continuer." };
+var ERR_DEMO    = { en: "Please fill in all fields.",               fr: "Veuillez remplir tous les champs." };
+
+function translateUI(lang) {
+  var t = UI_TEXT[lang] || UI_TEXT.en;
+  [
+    ["ui-consent-title","consent-title","innerHTML"],  ["ui-consent-p1","consent-p1","innerHTML"],
+    ["ui-consent-p2","consent-p2","innerHTML"],        ["ui-consent-p3","consent-p3","innerHTML"],
+    ["ui-consent-p4","consent-p4","textContent"],      ["ui-consent-label","consent-label","textContent"],
+    ["ui-lang-label","lang-label","textContent"],      ["ui-btn-consent","btn-consent","textContent"],
+    ["ui-role-title","role-title","textContent"],      ["ui-btn-role","btn-role","textContent"],
+    ["ui-demo-title","demo-title","textContent"],      ["ui-demo-subtitle","demo-subtitle","textContent"],
+    ["ui-label-prolific","label-prolific","textContent"],["ui-label-age","label-age","textContent"],
+    ["ui-label-gender","label-gender","textContent"],  ["ui-gender-select","gender-select","textContent"],
+    ["ui-gender-woman","gender-woman","textContent"],  ["ui-gender-man","gender-man","textContent"],
+    ["ui-gender-nonbinary","gender-nonbinary","textContent"],["ui-gender-prefer","gender-prefer","textContent"],
+    ["ui-label-country","label-country","textContent"],["ui-label-firstlang","label-firstlang","textContent"],
+    ["ui-btn-start","btn-start","textContent"],
+    ["ui-context-prompt","context-prompt","textContent"],["ui-context-skip","context-skip","textContent"],
+    ["ui-done-title","done-title","textContent"],      ["ui-done-p1","done-p1","textContent"],
+    ["ui-done-p2","done-p2","textContent"],            ["ui-done-p3","done-p3","textContent"]
+  ].forEach(function(r) {
+    var el = document.getElementById(r[0]);
+    if (el) el[r[2]] = t[r[1]];
+  });
+  if (typeof state !== "undefined" && state && state.role) updateRoleBriefing(lang);
+}
+translateUI("en");
+
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
+var state = {
+  lang: "en", role: null,
+  prolificId: "", age: "", gender: "", country: "", firstLang: "",
+  scenarios: [], current: 0, selected: null, labels: [],
+  phase: "rating", pendingRating: null, clickedWords: []
+};
+
+// Detect role from URL param
+(function() {
+  var m = window.location.search.match(/[?&]role=(agent|target|observer)/);
+  if (m) state.role = m[1];
+})();
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+function show(id) {
+  ["page-consent","page-role","page-demographics","page-survey","page-done"].forEach(function(p) {
+    document.getElementById(p).classList.add("hidden");
+  });
+  document.getElementById(id).classList.remove("hidden");
+}
+
+function setErr(id, msg) {
+  var el = document.getElementById(id);
+  if (el) el.textContent = msg;
+}
+
+function shuffle(arr) {
+  var a = arr.slice();
+  for (var i = a.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var tmp = a[i]; a[i] = a[j]; a[j] = tmp;
+  }
+  return a;
+}
+
+function buildSession() {
+  var pool = shuffle(SCENARIO_POOL).slice(0, SCENARIOS_PER_SESSION);
+  pool.splice(5,  0, ATTENTION_CHECKS[0]);
+  pool.splice(14, 0, ATTENTION_CHECKS[1]);
+  return pool;
+}
+
+// ---------------------------------------------------------------------------
+// Supabase insert
+// ---------------------------------------------------------------------------
+function supabaseInsert(row) {
+  return fetch(SUPABASE_URL + "/rest/v1/role_responses", {
+    method: "POST",
+    headers: {
+      "apikey":        SUPABASE_ANON_KEY,
+      "Authorization": "Bearer " + SUPABASE_ANON_KEY,
+      "Content-Type":  "application/json",
+      "Prefer":        "return=minimal"
+    },
+    body: JSON.stringify(row)
+  })
+  .then(function(r) {
+    if (!r.ok) return r.text().then(function(t) { throw new Error(t); });
+    return { ok: true };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Page: Consent
+// ---------------------------------------------------------------------------
+function startDemographics() {
+  state.lang = document.getElementById("lang-select").value;
+  if (!document.getElementById("consent-check").checked) {
+    setErr("err-consent", ERR_CONSENT[state.lang]);
+    return;
+  }
+  translateUI(state.lang);
+  if (!state.role) {
+    var roles = ["agent", "target", "observer"];
+    state.role = roles[Math.floor(Math.random() * 3)];
+  }
+  updateRoleBriefing(state.lang);
+  show("page-role");
+}
+
+function updateRoleBriefing(lang) {
+  var rl = ROLE_LABELS[lang] || ROLE_LABELS.en;
+  document.getElementById("role-icon").textContent       = ROLE_ICONS[state.role] || "👤";
+  document.getElementById("ui-role-intro").innerHTML     = (ROLE_BRIEFING[state.role] || {})[lang] || "";
+  document.getElementById("ui-role-label-line").innerHTML = "<strong>" + (rl[state.role] || state.role) + "</strong>";
+  document.getElementById("ui-role-desc").textContent    = (ROLE_DESCS[state.role] || {})[lang] || "";
+  document.getElementById("ui-role-instruction").textContent = "";
+}
+
+// ---------------------------------------------------------------------------
+// Page: Demographics → build session, start survey
+// ---------------------------------------------------------------------------
+function startSurvey() {
+  var pid = document.getElementById("prolific-id").value.trim();
+  var age = document.getElementById("age").value.trim();
+  var gen = document.getElementById("gender").value;
+  var cty = document.getElementById("country").value.trim();
+  var fl  = document.getElementById("first-language").value.trim();
+  if (!pid || !age || !gen || !cty || !fl) {
+    setErr("err-demo", ERR_DEMO[state.lang]);
+    return;
+  }
+  state.prolificId = pid; state.age = age; state.gender = gen;
+  state.country = cty; state.firstLang = fl;
+  state.scenarios = buildSession();
+  state.labels    = RESPONSE_VALUES.map(function(v, i) {
+    return { value: v, label: (RESPONSE_LABELS[state.lang] || RESPONSE_LABELS.en)[i] };
+  });
+  state.current = 0;
+  show("page-survey");
+  renderScenario();
+}
+
+// ---------------------------------------------------------------------------
+// Survey rendering
+// ---------------------------------------------------------------------------
+function renderScenario() {
+  var s     = state.scenarios[state.current];
+  var total = state.scenarios.length;
+  var sit   = SITUATION_LABEL[state.lang] || SITUATION_LABEL.en;
+  var rl    = ROLE_LABELS[state.lang] || ROLE_LABELS.en;
+
+  document.getElementById("scenario-counter").textContent =
+    sit[0] + " " + (state.current + 1) + " " + sit[1] + " " + total;
+  document.getElementById("progress-fill").style.width =
+    Math.round((state.current / total) * 100) + "%";
+  document.getElementById("role-badge-survey").textContent =
+    (ROLE_ICONS[state.role] || "") + " " + (rl[state.role] || state.role);
+  document.getElementById("scenario-text").textContent =
+    s[state.lang] || s.en || s.text || "";
+
+  // Role context card
+  var roleForCard  = state.role === "agent" ? s.agent_role : (state.role === "target" ? s.target_role : null);
+  var ctxTemplate  = (ROLE_CONTEXT_LINES[state.role] || {})[state.lang] || "";
+  var ctxText      = ctxTemplate
+    .replace("{role}",   roleForCard || state.role)
+    .replace("{agent}",  s.agent_role || "agent")
+    .replace("{target}", s.target_role || "target");
+  document.getElementById("survey-role-icon").textContent    = ROLE_ICONS[state.role] || "";
+  document.getElementById("survey-role-context").innerHTML   = ctxText;
+
+  // Question
+  var qTemplate = (ROLE_QUESTIONS[state.role] || {})[state.lang] || "";
+  var qText     = qTemplate
+    .replace("{role}",   roleForCard || state.role)
+    .replace("{agent}",  s.agent_role || "agent")
+    .replace("{target}", s.target_role || "target");
+  document.getElementById("question-text").textContent = qText;
+
+  // Response buttons
+  var container = document.getElementById("response-buttons");
+  container.innerHTML = "";
+  state.labels.forEach(function(item) {
+    var btn = document.createElement("button");
+    btn.className = "response-btn";
+    btn.textContent = item.label;
+    btn.onclick = function() { selectResponse(item.value, btn); };
+    container.appendChild(btn);
+  });
+
+  document.getElementById("btn-next").textContent =
+    (UI_TEXT[state.lang] || UI_TEXT.en)["btn-next"] + " \u2192";
+  state.selected     = null;
+  state.phase        = "rating";
+  state.pendingRating = null;
+  state.clickedWords  = [];
+  document.getElementById("context-phase").classList.add("hidden");
+  document.getElementById("response-buttons").style.display = "";
+  document.getElementById("question-text").style.display    = "";
+  document.getElementById("btn-next").disabled = true;
+  setErr("err-survey", "");
+}
+
+function selectResponse(value, btn) {
+  document.querySelectorAll(".response-btn").forEach(function(b) { b.classList.remove("selected"); });
+  btn.classList.add("selected");
+  state.selected = value;
+  document.getElementById("btn-next").disabled = false;
+}
+
+// ---------------------------------------------------------------------------
+// Next: rating phase → context phase → submit
+// ---------------------------------------------------------------------------
+function nextScenario() {
+  if (state.phase === "rating") {
+    if (!state.selected) return;
+    state.pendingRating = state.selected;
+    enterContextPhase();
+    return;
+  }
+  // context phase — submit
+  var s            = state.scenarios[state.current];
+  var contextWords = state.clickedWords
+    .sort(function(a, b) { return a.rank - b.rank; })
+    .map(function(w) { return w.word; }).join("|");
+  var btnNext = document.getElementById("btn-next");
+  btnNext.disabled = true;
+  btnNext.innerHTML = '<span class="spinner"></span>' + ((UI_TEXT[state.lang] || UI_TEXT.en)["btn-next"]);
+
+  supabaseInsert({
+    prolific_id:      state.prolificId,
+    scenario_id:      s.id,
+    response:         state.pendingRating,
+    role_perspective: state.role,
+    agent_role:       s.agent_role || "",
+    target_role:      s.target_role || "",
+    context_words:    contextWords,
+    age:              state.age,
+    gender:           state.gender,
+    country:          state.country,
+    language:         state.lang
+  })
+  .then(function() {
+    state.current++;
+    if (state.current >= state.scenarios.length) {
+      document.getElementById("ui-done-p2").textContent =
+        (UI_TEXT[state.lang] || UI_TEXT.en)["done-p2"];
+      var codeEl = document.getElementById("ui-done-completion-code");
+      if (codeEl) codeEl.textContent = COMPLETION_CODE;
+      show("page-done");
+    } else {
+      renderScenario();
+    }
+  })
+  .catch(function(err) {
+    btnNext.textContent = (UI_TEXT[state.lang] || UI_TEXT.en)["btn-next"] + " \u2192";
+    btnNext.disabled = false;
+    setErr("err-survey", "Save error — please try again. (" + err.message + ")");
+  });
+}
+
+function enterContextPhase() {
+  state.phase        = "context";
+  state.clickedWords = [];
+  document.getElementById("response-buttons").style.display = "none";
+  document.getElementById("question-text").style.display    = "none";
+  document.getElementById("context-phase").classList.remove("hidden");
+  var s = state.scenarios[state.current];
+  buildClickableText(s[state.lang] || s.en || s.text || "", "scenario-text-ctx");
+  document.getElementById("btn-next").textContent = "Continue \u2192";
+  document.getElementById("btn-next").disabled    = false;
+  setErr("err-survey", "");
+}
+
+function buildClickableText(text, containerId) {
+  var container = document.getElementById(containerId);
+  container.innerHTML = "";
+  text.split(/(\s+)/).forEach(function(token, i) {
+    if (/^\s+$/.test(token)) { container.appendChild(document.createTextNode(token)); return; }
+    var outer = document.createElement("span");
+    outer.className    = "word-token";
+    outer.dataset.clean = token.replace(/[^a-zA-Z0-9'\u2019-]/g, "").toLowerCase();
+    outer.dataset.tidx  = i;
+    var textNode = document.createElement("span");
+    textNode.textContent = token;
+    outer.appendChild(textNode);
+    var badge = document.createElement("sup");
+    badge.className    = "click-rank";
+    badge.style.display = "none";
+    outer.appendChild(badge);
+    outer.onclick = function() { toggleWord(outer); };
+    container.appendChild(outer);
+  });
+}
+
+function toggleWord(span) {
+  var tidx  = parseInt(span.dataset.tidx);
+  var badge = span.querySelector(".click-rank");
+  if (span.classList.contains("w-sel")) {
+    state.clickedWords = state.clickedWords.filter(function(w) { return w.tidx !== tidx; });
+    span.classList.remove("w-sel");
+    badge.style.display = "none";
+    renumberWords();
+  } else {
+    var rank = state.clickedWords.length + 1;
+    state.clickedWords.push({ word: span.dataset.clean, tidx: tidx, rank: rank });
+    span.classList.add("w-sel");
+    badge.textContent   = rank;
+    badge.style.display = "";
+  }
+}
+
+function renumberWords() {
+  state.clickedWords.sort(function(a, b) { return a.rank - b.rank; });
+  state.clickedWords.forEach(function(w, i) { w.rank = i + 1; });
+  document.querySelectorAll("#scenario-text-ctx .word-token.w-sel").forEach(function(sp) {
+    var tidx  = parseInt(sp.dataset.tidx);
+    var entry = state.clickedWords.find(function(w) { return w.tidx === tidx; });
+    if (entry) { var b = sp.querySelector(".click-rank"); if (b) { b.textContent = entry.rank; b.style.display = ""; } }
+  });
+}
+</script>
+</body>
+</html>

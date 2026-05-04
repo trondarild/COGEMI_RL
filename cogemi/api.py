@@ -12,6 +12,30 @@ from cogemi.learning.context_learner import ContextLearner, ContextsDict
 from cogemi.features.extractor_llm import LLMFeatureExtractor
 from cogemi.generalize.likelihood import ContextLikelihoodModel
 from cogemi.roles.role import available_roles, filter_by_role, is_role_indexed
+from cogemi.metrics.reliability import (
+    likert_to_ternary,
+    discretize_likert_responses,
+    confidence_weighted_distribution,
+)
+
+
+NORM_TYPES = ("personal", "injunctive", "empirical")
+
+
+def _is_norm_indexed(responses: List[SurveyResponse]) -> bool:
+    return any(r.norm_type is not None for r in responses)
+
+
+def _available_norm_types(responses: List[SurveyResponse]) -> List[str]:
+    seen: List[str] = []
+    for r in responses:
+        if r.norm_type and r.norm_type not in seen:
+            seen.append(r.norm_type)
+    return seen
+
+
+def _filter_by_norm_type(responses: List[SurveyResponse], norm_type: str) -> List[SurveyResponse]:
+    return [r for r in responses if r.norm_type == norm_type]
 
 
 class CogemiPipeline:
@@ -35,6 +59,11 @@ class CogemiPipeline:
         self._role_mode: bool = False
         self._role_learners: Dict[str, ContextLearner] = {}
         self._role_generalizers: Dict[str, ContextLikelihoodModel] = {}
+
+        # Set after fit() when responses carry norm_type values
+        self._norm_mode: bool = False
+        self._norm_learners: Dict[str, ContextLearner] = {}
+        self._norm_generalizers: Dict[str, ContextLikelihoodModel] = {}
 
     # ------------------------------------------------------------------
     # Factory methods
@@ -91,11 +120,18 @@ class CogemiPipeline:
 
         When survey_responses carry role_perspective values the pipeline
         automatically enters role mode: one sub-pipeline is fitted per role.
-        Responses without a role_perspective are handled in the standard
-        (non-role) path.
+
+        When survey_responses carry norm_type values ("personal", "injunctive",
+        "empirical") the pipeline enters norm mode: one sub-pipeline is fitted
+        per norm type.  Role mode and norm mode are mutually exclusive; role
+        mode takes precedence when both fields are set.
+
+        Responses without a role_perspective / norm_type are handled in the
+        standard (non-role, non-norm) path.
         """
         if is_role_indexed(survey_responses):
             self._role_mode = True
+            self._norm_mode = False
             self._role_learners = {}
             self._role_generalizers = {}
             for role in available_roles(survey_responses):
@@ -103,8 +139,19 @@ class CogemiPipeline:
                 learner, generalizer = self._fit_single(scenarios, role_responses)
                 self._role_learners[role] = learner
                 self._role_generalizers[role] = generalizer
+        elif _is_norm_indexed(survey_responses):
+            self._norm_mode = True
+            self._role_mode = False
+            self._norm_learners = {}
+            self._norm_generalizers = {}
+            for norm_type in _available_norm_types(survey_responses):
+                typed_responses = _filter_by_norm_type(survey_responses, norm_type)
+                learner, generalizer = self._fit_single(scenarios, typed_responses)
+                self._norm_learners[norm_type] = learner
+                self._norm_generalizers[norm_type] = generalizer
         else:
             self._role_mode = False
+            self._norm_mode = False
             samples = self.map_responses_to_samples(survey_responses)
             contexts = self.learner.fit(scenarios, samples)
             features = [self.feature_extractor.extract_from_scenario(s) for s in scenarios]
@@ -157,22 +204,26 @@ class CogemiPipeline:
         """Return learned contexts.
 
         In role mode returns {role: ContextsDict}.
-        In standard mode returns ContextsDict (same as before).
+        In norm mode returns {norm_type: ContextsDict}.
+        In standard mode returns ContextsDict.
         """
         if self._role_mode:
             return {role: learner.contexts() for role, learner in self._role_learners.items()}
+        if self._norm_mode:
+            return {nt: learner.contexts() for nt, learner in self._norm_learners.items()}
         return self.learner.contexts()
 
     def predict(
         self,
         new_observation: Observation,
         role: Optional[str] = None,
+        norm_type: Optional[str] = None,
     ) -> Dict[str, float]:
         """Predict the context probability distribution for a new observation.
 
-        In role mode, supply role="agent"/"target"/"observer" to use the
-        corresponding generalizer.  If role is omitted in role mode, the
-        first fitted role's generalizer is used as a fallback.
+        In role mode, supply role="agent"/"target"/"observer".
+        In norm mode, supply norm_type="personal"/"injunctive"/"empirical".
+        Falls back to the first fitted sub-pipeline if the key is not found.
         """
         abstracted = self.abstraction.abstract(new_observation)
         features = self.feature_extractor.extract_from_scenario(abstracted)
@@ -180,8 +231,13 @@ class CogemiPipeline:
         if self._role_mode:
             if role and role in self._role_generalizers:
                 return self._role_generalizers[role].predict_proba(features)
-            # fallback: first available role
             fallback = next(iter(self._role_generalizers.values()), self.generalizer)
+            return fallback.predict_proba(features)
+
+        if self._norm_mode:
+            if norm_type and norm_type in self._norm_generalizers:
+                return self._norm_generalizers[norm_type].predict_proba(features)
+            fallback = next(iter(self._norm_generalizers.values()), self.generalizer)
             return fallback.predict_proba(features)
 
         return self.generalizer.predict_proba(features)

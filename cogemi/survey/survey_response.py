@@ -10,10 +10,14 @@ class SurveyResponse:
         response_time: Optional[float] = None,
         metadata: Optional[Dict[str, Any]] = None,
         role_perspective: Optional[str] = None,
+        norm_type: Optional[str] = None,
+        confidence: Optional[int] = None,
     ):
         self.participant_id = participant_id
         self.scenario_id = scenario_id
         self.response = response
         self.response_time = response_time
-        self.metadata = metadata       # demographics, group, language
+        self.metadata = metadata
         self.role_perspective = role_perspective  # "agent" | "target" | "observer" | None
+        self.norm_type = norm_type    # "personal" | "injunctive" | "empirical" | None
+        self.confidence = confidence  # 1–5 certainty rating | None
