@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<!--
+  appropriateness_survey_aspects_park_prolific_v2.html
+  Social Appropriateness Study — reference-level instrument, Prolific pilot.
+
+  Changes from v1:
+    - Q1: 5-point Likert (personal appropriateness)  →  response_value 1–5
+    - Q2: 5-point Likert (injunctive norm)            →  response_value 1–5
+    - Q3: 3-point (empirical expectation)             →  response_value -1/0/1
+    - Confidence: 1–5 rating after rating block       →  confidence column
+    - Perceived disagreement: 1–5, shown every 10 main scenarios
+    - Test-retest: 5 scenarios repeated at the end    →  is_repeat = true
+    - 3 Supabase rows per scenario (norm_type: personal / injunctive / empirical)
+      plus optional disagreement row
+
+  Supabase table: responses_v2  (separate from v1 — full schema, no migrations needed)
+  Run the CREATE TABLE block in appropriateness_survey_supabase_setup.sql once before going live.
+
+  URL params (all required):
+    PROLIFIC_PID, STUDY_ID, SESSION_ID  — injected by Prolific
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Social Appropriateness Study</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f5f5f5; color: #222;
+      min-height: 100vh; display: flex;
+      align-items: flex-start; justify-content: center;
+      padding: 2rem 1rem;
+    }
+    .card {
+      background: #fff; border-radius: 10px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+      padding: 2rem; max-width: 660px; width: 100%;
+    }
+    h1 { font-size: 1.4rem; margin-bottom: 1rem; }
+    h2 { font-size: 1.1rem; margin-bottom: 0.75rem; color: #444; }
+    p  { line-height: 1.6; margin-bottom: 0.75rem; color: #333; }
+    .progress-bar { height: 6px; background: #e0e0e0; border-radius: 3px; margin-bottom: 1.5rem; overflow: hidden; }
+    .progress-fill { height: 100%; background: #4a90d9; border-radius: 3px; transition: width 0.3s ease; }
+    .scenario-text {
+      font-size: 1.05rem; line-height: 1.65;
+      background: #f9f9f9; border-left: 4px solid #4a90d9;
+      padding: 1rem 1.25rem; border-radius: 0 6px 6px 0;
+      margin-bottom: 1.25rem;
+    }
+    .phase-label {
+      font-size: 0.78rem; font-weight: 700; letter-spacing: 0.06em;
+      text-transform: uppercase; color: #4a90d9;
+      margin-bottom: 0.4rem;
+    }
+    .question { font-weight: 600; margin-bottom: 0.9rem; font-size: 0.97rem; }
+    /* 5-point Likert buttons — compact row */
+    .response-buttons {
+      display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.5rem;
+    }
+    .response-btn {
+      flex: 1; min-width: 80px; padding: 0.6rem 0.5rem;
+      border: 2px solid #ccc; border-radius: 8px;
+      background: #fff; font-size: 0.82rem; cursor: pointer;
+      text-align: center; line-height: 1.3;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .response-btn:hover    { border-color: #4a90d9; background: #eaf2fb; }
+    .response-btn.selected { border-color: #4a90d9; background: #4a90d9; color: #fff; }
+    /* 3-point buttons — wider */
+    .response-btn-wide {
+      flex: 1; min-width: 120px;
+    }
+    /* numbered buttons (confidence / disagreement) */
+    .response-btn-num {
+      min-width: 48px; max-width: 72px; padding: 0.65rem 0.4rem;
+      font-size: 1.05rem; font-weight: 700;
+    }
+    .scale-hint {
+      font-size: 0.78rem; color: #888; margin-bottom: 0.25rem;
+      display: flex; justify-content: space-between;
+    }
+    .btn-primary {
+      display: block; width: 100%; padding: 0.85rem;
+      background: #4a90d9; color: #fff; border: none;
+      border-radius: 8px; font-size: 1rem; font-weight: 600;
+      cursor: pointer; margin-top: 1.5rem; transition: background 0.15s;
+    }
+    .btn-primary:hover    { background: #3578c0; }
+    .btn-primary:disabled { background: #aaa; cursor: not-allowed; }
+    label { display: block; margin-bottom: 0.4rem; font-weight: 500; }
+    .hidden { display: none; }
+    .small  { font-size: 0.85rem; color: #666; }
+    .status-msg { margin-top: 1rem; color: #c0392b; font-size: 0.9rem; min-height: 1.2em; }
+    .spinner {
+      display: inline-block; width: 18px; height: 18px;
+      border: 3px solid #ccc; border-top-color: #4a90d9;
+      border-radius: 50%; animation: spin 0.7s linear infinite;
+      vertical-align: middle; margin-right: 0.4rem;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    /* aspect phase */
+    .aspect-prompt { font-size: 0.95rem; color: #555; margin-bottom: 1rem; font-style: italic; }
+    .aspect-buttons { display: flex; flex-direction: column; gap: 0.6rem; }
+    .aspect-btn {
+      display: flex; align-items: center; gap: 0.75rem;
+      padding: 0.75rem 1rem; border: 2px solid #ccc;
+      border-radius: 8px; background: #fff;
+      font-size: 0.95rem; cursor: pointer; text-align: left;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .aspect-btn:hover               { border-color: #4a90d9; background: #eaf2fb; }
+    .aspect-btn.ranked              { border-color: #4a90d9; background: #eaf2fb; }
+    .aspect-rank-badge {
+      flex-shrink: 0; width: 1.6rem; height: 1.6rem;
+      border-radius: 50%; background: #4a90d9; color: #fff;
+      font-size: 0.8rem; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      visibility: hidden;
+    }
+    .aspect-btn.ranked .aspect-rank-badge { visibility: visible; }
+    .divider { border: none; border-top: 1px solid #eee; margin: 1.25rem 0; }
+    .invalid-box {
+      background: #fff8e1; border: 1px solid #f0c040;
+      border-radius: 8px; padding: 1.5rem; margin-top: 1rem; color: #5a4000;
+    }
+  </style>
+</head>
+<body>
+<div class="card">
+
+  <!-- INVALID -->
+  <div id="page-invalid" class="hidden">
+    <h1>Access not valid</h1>
+    <div class="invalid-box">
+      <p>This survey must be accessed via your Prolific study link.</p>
+      <p>If you arrived here from Prolific and see this message, please return to the study page and click the survey link again.</p>
+    </div>
+  </div>
+
+  <!-- CONSENT -->
+  <div id="page-consent" class="hidden">
+    <h1>Social Appropriateness Study</h1>
+    <p>Thank you for taking part. This study investigates how people judge the social appropriateness of everyday actions in public settings.</p>
+    <p>You will read <strong>~47 short vignettes</strong> set in a public park. For each one you will be asked four quick questions: how appropriate you find the action, what you think others would consider appropriate, how common the behaviour is, and how certain you are of your judgement. You will then identify which aspect of the situation most influenced you.</p>
+    <p>The study takes approximately <strong>20–25 minutes</strong>. There are no right or wrong answers.</p>
+    <p><strong>Your data:</strong> Responses are stored securely and linked only to your Prolific ID, which will be removed from the analysis dataset after payment. Participation is voluntary; you may withdraw at any time.</p>
+    <p class="small">This research is conducted by [Institution]. If you have questions, contact [email].</p>
+    <div style="margin-top:1.25rem">
+      <label><input type="checkbox" id="consent-check" style="width:auto;margin-right:0.5rem">
+        I have read the information above and I consent to participate.</label>
+    </div>
+    <button class="btn-primary" onclick="startSurvey()">Start survey</button>
+    <div class="status-msg" id="status-consent"></div>
+  </div>
+
+  <!-- SURVEY -->
+  <div id="page-survey" class="hidden">
+    <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+    <h2 id="scenario-counter">Situation 1 of 47</h2>
+    <div class="scenario-text" id="scenario-text"></div>
+
+    <!-- Q1: personal appropriateness (5-point Likert) -->
+    <div id="q1-phase">
+      <p class="phase-label">Step 1 of 4 — Your assessment</p>
+      <p class="question">How socially appropriate do you personally consider this action?</p>
+      <div class="response-buttons" id="q1-buttons"></div>
+    </div>
+
+    <!-- Q2: injunctive norm (5-point Likert) -->
+    <div id="q2-phase" class="hidden">
+      <p class="phase-label">Step 2 of 4 — Social perception</p>
+      <p class="question">What do you think <em>most people</em> would consider appropriate in this situation?</p>
+      <div class="response-buttons" id="q2-buttons"></div>
+    </div>
+
+    <!-- Q3: empirical expectation (3-point) -->
+    <div id="q3-phase" class="hidden">
+      <p class="phase-label">Step 3 of 4 — Actual behaviour</p>
+      <p class="question">How often do you think people <em>actually</em> behave this way in similar situations?</p>
+      <div class="response-buttons" id="q3-buttons"></div>
+    </div>
+
+    <!-- Confidence (1–5) -->
+    <div id="confidence-phase" class="hidden">
+      <p class="phase-label">Step 4 of 4 — Your certainty</p>
+      <p class="question">How certain are you of your personal judgement in step 1?</p>
+      <div class="scale-hint"><span>Not at all certain</span><span>Completely certain</span></div>
+      <div class="response-buttons" id="confidence-buttons"></div>
+    </div>
+
+    <!-- Perceived disagreement (every 10 main scenarios) -->
+    <div id="disagreement-phase" class="hidden">
+      <hr class="divider">
+      <p class="phase-label">Quick check</p>
+      <p class="question">How much do you think people in general would <em>disagree</em> on the appropriateness of the last action?</p>
+      <div class="scale-hint"><span>Strong consensus</span><span>Much disagreement</span></div>
+      <div class="response-buttons" id="disagreement-buttons"></div>
+    </div>
+
+    <!-- Aspect ranking -->
+    <div id="aspect-phase" class="hidden">
+      <hr class="divider">
+      <p class="aspect-prompt">Which aspect most influenced your personal judgement? Click all three in order of importance (1 = most important).</p>
+      <div class="aspect-buttons" id="aspect-buttons"></div>
+      <p class="small" style="margin-top:0.75rem;color:#999" id="aspect-hint">Click all three to continue.</p>
+    </div>
+
+    <button class="btn-primary" id="btn-next" disabled onclick="nextStep()">Continue &#8594;</button>
+    <div class="status-msg" id="status-survey"></div>
+  </div>
+
+  <!-- COMPLETION -->
+  <div id="page-done" class="hidden">
+    <h1>Thank you!</h1>
+    <p>You have completed the study. Your responses have been recorded.</p>
+    <p>You will be redirected to Prolific automatically. If nothing happens within a few seconds, click the button below.</p>
+    <button class="btn-primary" id="btn-complete" onclick="completeStudy()">Return to Prolific</button>
+    <div class="status-msg" id="status-done"></div>
+  </div>
+
+</div>
+<script>
+// ---------------------------------------------------------------------------
+// CONFIG
+// ---------------------------------------------------------------------------
+var SUPABASE_URL        = "https://bcrssdaahemdueuqnnbt.supabase.co";
+var SUPABASE_ANON_KEY   = "sb_publishable_Rm0HnRFPxHraszzsp9bjkA_g2JMCkd-";
+var PROLIFIC_RETURN_URL = "https://app.prolific.com/submissions/complete?cc=CMZU9JD5";
+
+// ---------------------------------------------------------------------------
+// URL params
+// ---------------------------------------------------------------------------
+var urlParams    = new URLSearchParams(window.location.search);
+var PROLIFIC_PID = urlParams.get("PROLIFIC_PID") || "";
+var STUDY_ID     = urlParams.get("STUDY_ID")     || "";
+var SESSION_ID   = urlParams.get("SESSION_ID")   || "";
+
+window.addEventListener("DOMContentLoaded", function() {
+  show(!PROLIFIC_PID ? "page-invalid" : "page-consent");
+});
+
+// ---------------------------------------------------------------------------
+// Scale definitions
+// ---------------------------------------------------------------------------
+var Q1_LABELS = ["Strongly\ninappropriate", "Inappropriate", "Neutral", "Appropriate", "Strongly\nappropriate"];
+var Q1_VALUES = [1, 2, 3, 4, 5];
+
+var Q2_LABELS = Q1_LABELS;
+var Q2_VALUES = Q1_VALUES;
+
+var Q3_LABELS = ["Rarely", "Sometimes", "Often"];
+var Q3_VALUES = [-1, 0, 1];
+
+var NUM_LABELS = ["1", "2", "3", "4", "5"];
+var NUM_VALUES = [1, 2, 3, 4, 5];
+
+// ---------------------------------------------------------------------------
+// Scenario pool — park × 8 behaviors × 5 agent constraints = 40 scenarios
+// ---------------------------------------------------------------------------
+var SCENARIO_POOL = [
+  // ── yell ──────────────────────────────────────────────────────────────────
+  { id:"yell_park_child",
+    en:"A child playing tag in the park shouts at the top of their lungs as they chase their friends across the grass.",
+    aspect_a:"shouting loudly",                     aspect_b:"a child playing",                   aspect_c:"being in a public place" },
+  { id:"yell_park_drunk",
+    en:"A drunk adult on a park bench shouts obscenities at passing joggers, startling nearby families.",
+    aspect_a:"shouting loudly",                     aspect_b:"a drunk adult",                     aspect_c:"being in a public place" },
+  { id:"yell_park_authority",
+    en:"A PE teacher yells instructions and encouragement to their class doing exercises on the grass nearby.",
+    aspect_a:"shouting loudly",                     aspect_b:"a teacher instructing",             aspect_c:"being in a public place" },
+  { id:"yell_park_distress",
+    en:"A person sitting alone on a park bench suddenly yells out after reading a message on their phone.",
+    aspect_a:"shouting loudly",                     aspect_b:"a person reading on their phone",   aspect_c:"being in a public place" },
+  { id:"yell_park_performer",
+    en:"A street performer uses a booming voice to call out to passersby and gather a crowd for their act.",
+    aspect_a:"shouting loudly",                     aspect_b:"a person doing a street performance", aspect_c:"being in a public place" },
+
+  // ── kiss someone ──────────────────────────────────────────────────────────
+  { id:"kiss_park_child",
+    en:"Two children playing in the park lean in and give each other a quick kiss on the cheek.",
+    aspect_a:"kissing in public",                   aspect_b:"children playing",                  aspect_c:"being in a public place" },
+  { id:"kiss_park_drunk",
+    en:"A drunk adult at the park tries to kiss a stranger they have just met on a bench; the stranger pulls back slightly.",
+    aspect_a:"kissing in public",                   aspect_b:"initiating physical contact with a stranger", aspect_c:"a drunk person" },
+  { id:"kiss_park_authority",
+    en:"A school principal attending a community event in the park greets an old colleague with a kiss on the cheek.",
+    aspect_a:"kissing in public",                   aspect_b:"initiating physical contact with a colleague", aspect_c:"a manager or leader" },
+  { id:"kiss_park_distress",
+    en:"A person who has just received good news after weeks of anxiety kisses their partner repeatedly in the middle of the park path.",
+    aspect_a:"kissing in public",                   aspect_b:"initiating physical contact with a partner", aspect_c:"a person feeling relief" },
+  { id:"kiss_park_performer",
+    en:"Two street performers finish their act with a theatrical kiss, prompting applause from the gathered crowd in the park.",
+    aspect_a:"kissing in public",                   aspect_b:"physical contact as part of a performance", aspect_c:"persons acting" },
+
+  // ── talk about money ──────────────────────────────────────────────────────
+  { id:"money_park_child",
+    en:"A child sitting on a park bench loudly asks their parent how much money they earn, within earshot of other families nearby.",
+    aspect_a:"talking about money in public",       aspect_b:"a child talking loudly",            aspect_c:"divulging sensitive information" },
+  { id:"money_park_drunk",
+    en:"A drunk adult sits on a park bench and loudly tells a stranger about the debt they are in, not noticing how much detail they are sharing.",
+    aspect_a:"talking about money in public",       aspect_b:"a drunk adult",                     aspect_c:"divulging sensitive information" },
+  { id:"money_park_authority",
+    en:"A financial advisor meets a client on a park bench and discusses their investment portfolio and savings in full audible detail.",
+    aspect_a:"talking about money in public",       aspect_b:"advisor-client communication",      aspect_c:"divulging sensitive information" },
+  { id:"money_park_distress",
+    en:"A visibly distressed person calls someone on their phone while walking through the park and talks loudly about not being able to pay their rent.",
+    aspect_a:"talking about money in public",       aspect_b:"divulging sensitive information",   aspect_c:"a person talking on the phone" },
+  { id:"money_park_performer",
+    en:"A street fundraiser in the park loudly explains their organisation's budget and donation targets to whoever will stop and listen.",
+    aspect_a:"talking about financing in public",   aspect_b:"public outreach",                   aspect_c:"a person doing fundraising" },
+
+  // ── drink alcohol ─────────────────────────────────────────────────────────
+  { id:"alcohol_park_child",
+    en:"At a family picnic in the park, a child reaches for a glass of wine left on the blanket and begins to drink from it before their parent notices.",
+    aspect_a:"public alcohol consumption",          aspect_b:"a child drinking alcohol",          aspect_c:"a child acting without parents noticing" },
+  { id:"alcohol_park_drunk",
+    en:"An already visibly drunk adult opens another can of beer on a park bench and drinks it in front of families with young children nearby.",
+    aspect_a:"public alcohol consumption",          aspect_b:"an adult drinking alcohol",         aspect_c:"being drunk near families with young children" },
+  { id:"alcohol_park_authority",
+    en:"A manager drinks a beer at a casual team picnic in the park with their direct reports gathered around them.",
+    aspect_a:"public alcohol consumption",          aspect_b:"a manager or leader",               aspect_c:"a work-related event" },
+  { id:"alcohol_park_distress",
+    en:"Someone sits alone on a bench in the park and drinks steadily from a bottle of wine, visibly upset and staring into the distance.",
+    aspect_a:"public alcohol consumption",          aspect_b:"an upset person",                   aspect_c:"consuming alcohol alone" },
+  { id:"alcohol_park_performer",
+    en:"A street performer takes a theatrical swig from a prop bottle of wine as part of their comedy act in the park.",
+    aspect_a:"acting like consuming alcohol",       aspect_b:"an actor",                          aspect_c:"performing in public" },
+
+  // ── wear makeup ───────────────────────────────────────────────────────────
+  { id:"makeup_park_child",
+    en:"A child sits on a picnic blanket in the park and applies their mother's lipstick they have found in her bag, smearing it across their face.",
+    aspect_a:"a child painting their face",         aspect_b:"a child taking their parent's things", aspect_c:"being in a public place" },
+  { id:"makeup_park_drunk",
+    en:"A drunk adult pulls out a lipstick in the park and applies it messily while laughing loudly, drawing stares from passersby.",
+    aspect_a:"an adult applying makeup",            aspect_b:"a drunk adult",                     aspect_c:"laughing loudly in public" },
+  { id:"makeup_park_authority",
+    en:"A headteacher on a school outing in the park discreetly touches up their makeup on a bench before a parent arrives to speak to them.",
+    aspect_a:"a leader or manager",                 aspect_b:"applying makeup in public",         aspect_c:"preparing for a meeting" },
+  { id:"makeup_park_distress",
+    en:"A person sits on a park bench and carefully applies concealer under their eyes after clearly having been crying.",
+    aspect_a:"an upset person",                     aspect_b:"applying makeup in public",         aspect_c:"hiding signs of distress" },
+  { id:"makeup_park_performer",
+    en:"A street performer applies dramatic stage makeup in public while setting up their pitch in the park, visible to everyone walking by.",
+    aspect_a:"an actor",                            aspect_b:"preparing for a performance",       aspect_c:"applying makeup in public" },
+
+  // ── cry ───────────────────────────────────────────────────────────────────
+  { id:"cry_park_child",
+    en:"A child falls over in the park and begins crying loudly, drawing the attention and concern of nearby adults.",
+    aspect_a:"an upset child",                      aspect_b:"crying in public",                  aspect_c:"drawing attention" },
+  { id:"cry_park_drunk",
+    en:"A drunk adult sitting alone on a park bench begins crying and talking to themselves, ignored by most passersby.",
+    aspect_a:"crying in public",                    aspect_b:"a drunk adult",                     aspect_c:"an upset person" },
+  { id:"cry_park_authority",
+    en:"A teacher on a school trip in the park steps away from the group and becomes visibly tearful after receiving a phone call.",
+    aspect_a:"a leader or manager",                 aspect_b:"crying in public",                  aspect_c:"an upset person" },
+  { id:"cry_park_distress",
+    en:"Someone who has just received devastating news sits on a park bench and cries quietly but openly, making no attempt to hide their tears.",
+    aspect_a:"crying in public",                    aspect_b:"an upset person",                   aspect_c:"receiving bad news" },
+  { id:"cry_park_performer",
+    en:"A mime artist in the park performs an exaggerated crying routine as part of their act, drawing a small crowd of amused onlookers.",
+    aspect_a:"an actor",                            aspect_b:"making a performance",              aspect_c:"acting out negative emotions" },
+
+  // ── play music without headphones ─────────────────────────────────────────
+  { id:"music_park_child",
+    en:"A child sits on the grass in the park playing a video game at full volume without headphones, the sound audible to those on nearby benches.",
+    aspect_a:"causing loud sounds",                 aspect_b:"a child acting without supervision", aspect_c:"being in a public place" },
+  { id:"music_park_drunk",
+    en:"A drunk adult plays loud dance music from their phone speaker on a park bench, nodding along, surrounded by families trying to enjoy the quiet.",
+    aspect_a:"a drunk adult",                       aspect_b:"causing loud sounds",               aspect_c:"being in a public place" },
+  { id:"music_park_authority",
+    en:"A fitness instructor leads an outdoor exercise class in the park with a Bluetooth speaker playing motivational music at high volume.",
+    aspect_a:"a manager or leader",                 aspect_b:"causing loud sounds",               aspect_c:"exercising in public" },
+  { id:"music_park_distress",
+    en:"A visibly upset person walks slowly through the park playing loud, emotionally charged music from their phone with no headphones.",
+    aspect_a:"an upset person",                     aspect_b:"causing loud sounds",               aspect_c:"being in a public place" },
+  { id:"music_park_performer",
+    en:"A street musician sets up in the park and plays their speaker-backed acoustic set at considerable volume to whoever stops to listen.",
+    aspect_a:"a musician",                          aspect_b:"causing loud sounds",               aspect_c:"making a public performance" },
+
+  // ── leave rubbish behind ──────────────────────────────────────────────────
+  { id:"litter_park_child",
+    en:"A child finishes their snack in the park and leaves the wrapper on the bench before running off to play, their parent not noticing.",
+    aspect_a:"a child",                             aspect_b:"littering in public",               aspect_c:"a child acting without parents noticing" },
+  { id:"litter_park_drunk",
+    en:"A drunk adult leaves a collection of empty cans and food wrappers strewn around a park bench when they get up to leave.",
+    aspect_a:"a drunk person",                      aspect_b:"littering in public",               aspect_c:"causing extra work for others" },
+  { id:"litter_park_authority",
+    en:"A manager attending a work picnic in the park accidentally leaves behind several used cups and napkins when the group packs up in a hurry.",
+    aspect_a:"a manager or leader",                 aspect_b:"causing extra work for others",     aspect_c:"littering in public" },
+  { id:"litter_park_distress",
+    en:"Rushing out of the park after receiving an urgent call, a person leaves their half-eaten lunch and packaging behind on the bench.",
+    aspect_a:"littering in public",                 aspect_b:"an upset person",                   aspect_c:"causing extra work for others" },
+  { id:"litter_park_performer",
+    en:"A street performer dismantles their setup quickly after a poor show and leaves flyers and packaging scattered on the ground around their pitch.",
+    aspect_a:"an actor",                            aspect_b:"littering in public",               aspect_c:"causing extra work for others" }
+];
+
+var ATTENTION_CHECKS = [
+  { id:"sa_check_appropriate",
+    en:"Someone holds the door open for the person directly behind them.",
+    aspect_a:"holding the door open", aspect_b:"for the person directly behind", aspect_c:"a common courtesy gesture" },
+  { id:"sa_check_inappropriate",
+    en:"Someone pushes past everyone waiting and barges to the front of the queue at a hospital reception.",
+    aspect_a:"pushing past everyone waiting", aspect_b:"barging to the front of the queue", aspect_c:"at a hospital reception" }
+];
+
+// 5 scenarios repeated at the end for test-retest reliability (spanning valence range)
+var RETEST_IDS = [
+  "yell_park_drunk",       // clearly inappropriate
+  "litter_park_drunk",     // inappropriate
+  "yell_park_child",       // appropriate / neutral
+  "alcohol_park_performer",// appropriate
+  "cry_park_distress"      // appropriate / neutral
+];
+
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
+var state = {
+  scenarios: [],
+  current:   0,
+  phase:     "q1",   // "q1" | "q2" | "q3" | "confidence" | "disagreement" | "aspects"
+  q1Value:   null, q1Label: null,
+  q2Value:   null, q2Label: null,
+  q3Value:   null, q3Label: null,
+  confidence:    null,
+  disagreement:  null,   // set when disagreement phase fires; null otherwise
+  rankedAspects: [],
+  mainCount: 0            // counts non-check, non-retest scenarios (for disagreement trigger)
+};
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+function show(id) {
+  ["page-invalid","page-consent","page-survey","page-done"].forEach(function(p) {
+    document.getElementById(p).classList.add("hidden");
+  });
+  document.getElementById(id).classList.remove("hidden");
+}
+function showPhase(id) { document.getElementById(id).classList.remove("hidden"); }
+function hidePhase(id) { document.getElementById(id).classList.add("hidden"); }
+function setStatus(elId, msg) { document.getElementById(elId).textContent = msg; }
+function setBtnDisabled(v)    { document.getElementById("btn-next").disabled = v; }
+
+function shuffle(arr) {
+  var a = arr.slice();
+  for (var i = a.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var tmp = a[i]; a[i] = a[j]; a[j] = tmp;
+  }
+  return a;
+}
+
+function makeItem(s, isRepeat) {
+  return {
+    id: s.id, text: s.en, is_repeat: !!isRepeat,
+    aspects: shuffle([s.aspect_a, s.aspect_b, s.aspect_c])
+  };
+}
+
+function buildSession() {
+  var pool = shuffle(SCENARIO_POOL).map(function(s) { return makeItem(s, false); });
+
+  // Attention checks at positions 9 and 21
+  pool.splice(9,  0, makeItem(ATTENTION_CHECKS[0], false));
+  pool.splice(21, 0, makeItem(ATTENTION_CHECKS[1], false));
+
+  // Append test-retest scenarios (last 5, shuffled order)
+  var retestPool = SCENARIO_POOL.filter(function(s) { return RETEST_IDS.indexOf(s.id) !== -1; });
+  shuffle(retestPool).forEach(function(s) { pool.push(makeItem(s, true)); });
+
+  return pool;  // 40 + 2 + 5 = 47
+}
+
+// ---------------------------------------------------------------------------
+// Supabase
+// ---------------------------------------------------------------------------
+function supabaseInsert(row) {
+  return fetch(SUPABASE_URL + "/rest/v1/responses_v2", {
+    method: "POST",
+    headers: {
+      "apikey":        SUPABASE_ANON_KEY,
+      "Authorization": "Bearer " + SUPABASE_ANON_KEY,
+      "Content-Type":  "application/json",
+      "Prefer":        "return=minimal"
+    },
+    body: JSON.stringify(row)
+  }).then(function(r) {
+    if (!r.ok) return r.text().then(function(t) { throw new Error(t); });
+    return { ok: true };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Consent → Survey
+// ---------------------------------------------------------------------------
+function startSurvey() {
+  if (!document.getElementById("consent-check").checked) {
+    setStatus("status-consent", "Please tick the consent box to continue.");
+    return;
+  }
+  setStatus("status-consent", "");
+  state.scenarios = buildSession();
+  state.current   = 0;
+  state.mainCount = 0;
+  show("page-survey");
+  renderScenario();
+}
+
+// ---------------------------------------------------------------------------
+// Render a fresh scenario (always starts at Q1)
+// ---------------------------------------------------------------------------
+function renderScenario() {
+  var s     = state.scenarios[state.current];
+  var total = state.scenarios.length;
+
+  document.getElementById("scenario-counter").textContent =
+    "Situation " + (state.current + 1) + " of " + total;
+  document.getElementById("scenario-text").textContent = s.text;
+  document.getElementById("progress-fill").style.width =
+    Math.round((state.current / total) * 100) + "%";
+
+  // Reset per-scenario state
+  state.phase = "q1";
+  state.q1Value = null; state.q1Label = null;
+  state.q2Value = null; state.q2Label = null;
+  state.q3Value = null; state.q3Label = null;
+  state.confidence   = null;
+  state.disagreement = null;
+  state.rankedAspects = [];
+
+  // Show only Q1
+  showPhase("q1-phase");
+  hidePhase("q2-phase");
+  hidePhase("q3-phase");
+  hidePhase("confidence-phase");
+  hidePhase("disagreement-phase");
+  hidePhase("aspect-phase");
+
+  buildButtons("q1-buttons", Q1_LABELS, Q1_VALUES, false, function(val, label) {
+    state.q1Value = val; state.q1Label = label; setBtnDisabled(false);
+  });
+
+  document.getElementById("btn-next").textContent = "Continue →";
+  setBtnDisabled(true);
+  setStatus("status-survey", "");
+}
+
+// ---------------------------------------------------------------------------
+// Generic button builder
+// ---------------------------------------------------------------------------
+function buildButtons(containerId, labels, values, numeric, onSelect) {
+  var container = document.getElementById(containerId);
+  container.innerHTML = "";
+  labels.forEach(function(label, i) {
+    var btn = document.createElement("button");
+    btn.className = "response-btn" + (numeric ? " response-btn-num" : (labels.length === 3 ? " response-btn-wide" : ""));
+    // Render newlines in labels
+    btn.innerHTML = label.replace(/\n/g, "<br>");
+    btn.onclick = function() {
+      container.querySelectorAll(".response-btn").forEach(function(b) { b.classList.remove("selected"); });
+      btn.classList.add("selected");
+      onSelect(values[i], label.replace(/\n/g, " "));
+    };
+    container.appendChild(btn);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Phase state machine
+// ---------------------------------------------------------------------------
+function nextStep() {
+  var s = state.scenarios[state.current];
+  var isMain = !s.is_repeat && s.id.indexOf("sa_check_") === -1;
+
+  if (state.phase === "q1") {
+    hidePhase("q1-phase"); showPhase("q2-phase");
+    state.phase = "q2";
+    buildButtons("q2-buttons", Q2_LABELS, Q2_VALUES, false, function(val, label) {
+      state.q2Value = val; state.q2Label = label; setBtnDisabled(false);
+    });
+    setBtnDisabled(true);
+    return;
+  }
+
+  if (state.phase === "q2") {
+    hidePhase("q2-phase"); showPhase("q3-phase");
+    state.phase = "q3";
+    buildButtons("q3-buttons", Q3_LABELS, Q3_VALUES, false, function(val, label) {
+      state.q3Value = val; state.q3Label = label; setBtnDisabled(false);
+    });
+    setBtnDisabled(true);
+    return;
+  }
+
+  if (state.phase === "q3") {
+    hidePhase("q3-phase"); showPhase("confidence-phase");
+    state.phase = "confidence";
+    buildButtons("confidence-buttons", NUM_LABELS, NUM_VALUES, true, function(val) {
+      state.confidence = val; setBtnDisabled(false);
+    });
+    setBtnDisabled(true);
+    return;
+  }
+
+  if (state.phase === "confidence") {
+    if (isMain) state.mainCount++;
+    hidePhase("confidence-phase");
+    if (isMain && state.mainCount % 10 === 0) {
+      showPhase("disagreement-phase");
+      state.phase = "disagreement";
+      buildButtons("disagreement-buttons", NUM_LABELS, NUM_VALUES, true, function(val) {
+        state.disagreement = val; setBtnDisabled(false);
+      });
+      setBtnDisabled(true);
+    } else {
+      enterAspectPhase();
+    }
+    return;
+  }
+
+  if (state.phase === "disagreement") {
+    hidePhase("disagreement-phase");
+    enterAspectPhase();
+    return;
+  }
+
+  if (state.phase === "aspects") {
+    submitScenario();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Aspect phase
+// ---------------------------------------------------------------------------
+function enterAspectPhase() {
+  state.phase         = "aspects";
+  state.rankedAspects = [];
+  showPhase("aspect-phase");
+  document.getElementById("aspect-hint").textContent = "Click all three to continue.";
+  setBtnDisabled(true);
+
+  var s         = state.scenarios[state.current];
+  var container = document.getElementById("aspect-buttons");
+  container.innerHTML = "";
+  s.aspects.forEach(function(text) {
+    var btn   = document.createElement("button");
+    btn.className = "aspect-btn";
+    var badge = document.createElement("span");
+    badge.className = "aspect-rank-badge";
+    var lbl = document.createElement("span");
+    lbl.textContent = text;
+    btn.appendChild(badge);
+    btn.appendChild(lbl);
+    btn.onclick = function() { toggleAspect(btn, badge, text); };
+    container.appendChild(btn);
+  });
+}
+
+function toggleAspect(btn, badge, text) {
+  if (btn.classList.contains("ranked")) {
+    var rank = parseInt(badge.textContent);
+    state.rankedAspects.splice(rank - 1, 1);
+    btn.classList.remove("ranked");
+    badge.textContent = "";
+    renumberAspects();
+  } else {
+    if (state.rankedAspects.length >= 3) return;
+    state.rankedAspects.push(text);
+    btn.classList.add("ranked");
+    badge.textContent = state.rankedAspects.length;
+  }
+  setBtnDisabled(state.rankedAspects.length < 3);
+  document.getElementById("aspect-hint").textContent =
+    state.rankedAspects.length < 3 ? "Click all three to continue." : "";
+}
+
+function renumberAspects() {
+  document.querySelectorAll("#aspect-buttons .aspect-btn").forEach(function(btn) {
+    var lbl   = btn.querySelector("span:last-child").textContent;
+    var idx   = state.rankedAspects.indexOf(lbl);
+    var badge = btn.querySelector(".aspect-rank-badge");
+    if (idx >= 0) { btn.classList.add("ranked");    badge.textContent = idx + 1; }
+    else          { btn.classList.remove("ranked"); badge.textContent = "";      }
+  });
+  setBtnDisabled(state.rankedAspects.length < 3);
+}
+
+// ---------------------------------------------------------------------------
+// Submit — 3 rows per scenario + optional disagreement row
+// ---------------------------------------------------------------------------
+function submitScenario() {
+  var s       = state.scenarios[state.current];
+  var btnNext = document.getElementById("btn-next");
+  btnNext.disabled  = true;
+  btnNext.innerHTML = '<span class="spinner"></span>Saving…';
+
+  var aspectRanking = state.rankedAspects.join("|");
+  var base = {
+    prolific_id: PROLIFIC_PID,
+    study_id:    STUDY_ID,
+    session_id:  SESSION_ID,
+    scenario_id: s.id,
+    language:    "en",
+    aspect_ranking: aspectRanking,
+    is_repeat:   s.is_repeat
+  };
+
+  var rows = [
+    Object.assign({}, base, {
+      norm_type:      "personal",
+      response:       state.q1Label,
+      response_value: state.q1Value,
+      confidence:     state.confidence
+    }),
+    Object.assign({}, base, {
+      norm_type:      "injunctive",
+      response:       state.q2Label,
+      response_value: state.q2Value
+    }),
+    Object.assign({}, base, {
+      norm_type:      "empirical",
+      response:       state.q3Label,
+      response_value: state.q3Value
+    })
+  ];
+
+  if (state.disagreement !== null) {
+    rows.push({
+      prolific_id:            PROLIFIC_PID,
+      study_id:               STUDY_ID,
+      session_id:             SESSION_ID,
+      scenario_id:            "__disagreement_" + state.mainCount + "__",
+      norm_type:              "disagreement",
+      perceived_disagreement: state.disagreement,
+      language:               "en"
+    });
+  }
+
+  Promise.all(rows.map(supabaseInsert))
+    .then(function() {
+      state.current++;
+      if (state.current >= state.scenarios.length) {
+        show("page-done");
+        autoRedirect();
+      } else {
+        renderScenario();
+      }
+    })
+    .catch(function(err) {
+      btnNext.textContent = "Continue →";
+      btnNext.disabled    = false;
+      setStatus("status-survey", "Save error — please try again. (" + err.message + ")");
+    });
+}
+
+// ---------------------------------------------------------------------------
+// Completion
+// ---------------------------------------------------------------------------
+function completeStudy() {
+  var btnDone = document.getElementById("btn-complete");
+  btnDone.disabled  = true;
+  btnDone.innerHTML = '<span class="spinner"></span>Redirecting…';
+  supabaseInsert({
+    prolific_id:     PROLIFIC_PID,
+    study_id:        STUDY_ID,
+    session_id:      SESSION_ID,
+    scenario_id:     "__completion__",
+    response:        "completed",
+    completion_code: "CMZU9JD5"
+  })
+  .then(function()  { window.location.href = PROLIFIC_RETURN_URL; })
+  .catch(function() { window.location.href = PROLIFIC_RETURN_URL; });
+}
+
+function autoRedirect() { setTimeout(completeStudy, 2500); }
+</script>
+</body>
+</html>

@@ -89,24 +89,29 @@
     - [ ] update contexts: add that it's a special case when appropriate (e.g. a person leaving litter when get upsetting phone call)
     - [ ] approve pilot and pay Prolific to commence live experiment
 ## Reference-level instrument upgrades (see reference-level-survey-requirements.md)
-### Survey HTML changes
-- [ ] **Construct separation** (non-optional per Bicchieri measurement standards)
-    - [ ] add Q2 injunctive norm: "What do you think most people in this situation would consider appropriate?" (same ternary/Likert scale)
-    - [ ] add Q3 empirical expectation: "How often do you think people actually behave this way?" (Rarely / Sometimes / Often)
-    - [ ] present Q1→Q2→Q3 sequentially after each scenario before moving to aspect phase
-    - [ ] store `norm_type` ("personal" | "injunctive" | "empirical") as a column alongside each row in Supabase
-- [ ] **Response scale anchoring** — replace ternary with 5-point Likert for Q1 and Q2 to allow variance estimation; discretize to {-1, 0, 1} in pipeline
-    - [ ] update HTML response buttons to 5 levels (Strongly Inappropriate → Strongly Appropriate)
-    - [ ] add SQL migration for new `response_value` integer column in Supabase (store raw 1–5 alongside text label)
-- [ ] **Confidence / uncertainty rating** — after each ternary/Likert response, ask "How certain are you?" (1=Not at all, 5=Very certain)
-    - [ ] add `confidence` column to Supabase `responses` table (SQL migration)
-    - [ ] store confidence value with each row
-- [ ] **Test-retest reliability** — repeat 5 scenarios at the end of the survey (participants see them twice, spaced apart)
-    - [ ] select 5 representative scenarios spanning valence range
-    - [ ] insert them as duplicates at positions 35–40 (after the main 40 are complete)
-    - [ ] flag repeated items with `is_repeat: true` column in Supabase
-- [ ] **Perceived disagreement** — add one item per 10 scenarios: "How much do you think people would disagree on this?" (1=Strong consensus → 5=Lots of disagreement)
-    - [ ] store as `perceived_disagreement` column (integer) in Supabase
+### Survey HTML changes — implemented in `appropriateness_survey_aspects_park_prolific_v2.html`
+- [x] **Construct separation** (non-optional per Bicchieri measurement standards)
+    - [x] add Q2 injunctive norm: "What do most people think?" (5-point Likert)
+    - [x] add Q3 empirical expectation: "How often do people actually do this?" (Rarely / Sometimes / Often)
+    - [x] present Q1→Q2→Q3→confidence sequentially before aspect phase
+    - [x] store `norm_type` ("personal" | "injunctive" | "empirical") as a column in `responses_v2`
+- [x] **Response scale anchoring** — 5-point Likert for Q1 and Q2; discretize to {-1, 0, 1} in pipeline
+    - [x] HTML response buttons: Strongly inappropriate → Strongly appropriate (5 levels)
+    - [x] `response_value` integer column in `responses_v2` (stores raw 1–5)
+- [x] **Confidence / uncertainty rating** — "How certain are you?" (1–5) after each scenario's rating block
+    - [x] `confidence` column in `responses_v2`
+- [x] **Test-retest reliability** — 5 scenarios repeated at end of survey, flagged `is_repeat = true`
+    - [x] scenarios span valence range: yell_park_drunk, litter_park_drunk, yell_park_child, alcohol_park_performer, cry_park_distress
+    - [x] appended after position 42 (total session: 47 items)
+    - [x] `is_repeat` boolean column in `responses_v2`
+- [x] **Perceived disagreement** — 1–5 probe every 10 main scenarios; stored in `responses_v2`
+### v2 database
+- [x] design `responses_v2` table with full v2 schema (no ALTER TABLE migrations needed)
+    - [x] SQL in `appropriateness_survey_supabase_setup.sql`, includes RLS anon-insert policy
+- [ ] **create `responses_v2` table in Supabase** — run `CREATE TABLE responses_v2` block from `appropriateness_survey_supabase_setup.sql` in Supabase SQL editor
+- [ ] test v2 survey end-to-end against live `responses_v2` table (check rows appear with correct norm_type, response_value, confidence, is_repeat)
+- [ ] push `appropriateness_survey_aspects_park_prolific_v2.html` to GitHub Pages
+- [ ] update `data/prolific-survey-info.md` with v2 timing (~20–25 min) and recommended reward (~£3.00–£3.75)
 ### Pipeline changes
 - [x] add `norm_type: Optional[str]` field to `SurveyResponse` — "personal" | "injunctive" | "empirical"
 - [x] add `confidence: Optional[int]` field to `SurveyResponse`
@@ -116,15 +121,20 @@
     - [x] `distributional_consistency(dist_a, dist_b)` — JS divergence between two repeat-item distributions
     - [x] `within_scenario_reliability(distributions)` — mean pairwise JS across repeated items
 - [x] add `norm_type`-aware routing in `CogemiPipeline.fit()`: when responses carry `norm_type`, fit separate sub-pipelines per type (analogous to role mode)
+- [x] write unit + integration tests for all new pipeline additions (`tests/test_reference_spec.py`, 41 tests)
 - [ ] add confidence-weighted distribution estimator: up-weight high-confidence responses when computing `estimate_distribution()`
 - [ ] add reliability reporting: given a set of repeated-item responses, compute and report mean JS consistency
 - [ ] update `HumanSurveyEvaluator` to accept a 5-point Likert judgment map and discretize internally via `likert_to_ternary()`
+### Gaps vs. example-ref-level-vignette.md (priority order)
+- [ ] **Q4 — Expected sanction** (low effort, high impact): add 5-point phase "If someone objected to this action, how likely is it that others nearby would disapprove of the objection?" — distinguishes "action is appropriate" from "objecting violates the local norm"; save as `norm_type="sanction"` row in `responses_v2`
+- [ ] **Q3 — Replace 3-point empirical with 0–100 slider**: "Out of 100 people in this situation, how many do you think would react positively?" — continuous estimate gives richer empirical distribution; store as `response_value` integer 0–100
+- [ ] **Q6 — Perceived disagreement per item**: remove every-10-scenario gate; ask after every scenario's confidence phase; small time cost but substantially richer uncertainty data
+- [ ] **Calibration / anchoring vignettes**: add 4 fixed scenarios (positive anchor, negative anchor, boundary contrast, paraphrase repeat of one main scenario) to orient participants and enable cross-participant calibration; insert at fixed positions independent of shuffle
+- [ ] **Q7 — Forced-choice action ranking** (high effort, high RL value): for each scenario present 4–5 alternative actions and ask participant to rank from most to least appropriate; gives preference ordering suitable for Bradley-Terry / policy learning; requires per-scenario action alternatives to be authored
+- [ ] **Structured context schema**: store context dimensions as queryable fields alongside each row — `behavior`, `agent_constraint`, `setting`; can be derived from `scenario_id` at insert time in JS rather than requiring schema change
 ## Communication and collaboration
 - [x] summarise progress so far and give examples of current scenario-data for social-appropriateness, morals-from-children's-books, justice
-- [ ] meeting with MK and GM — 2026-04-29 14:00
-    - [ ] prepare progress report: what is done, what is running (Prolific pilot), what is next
-    - [ ] prepare demo material: show live survey on GitHub Pages, show Supabase data, walk through scenario structure (1×8×5 design)
-    - [ ] outline path forward: GM processes Part 1 scenarios (yell × 8 settings), pilot results → full experiment, pipeline integration
+- [ ] meeting with MK and GM — scheduled 2026-04-29 14:00 (follow up on outcomes)
     - [ ] paper framing discussion: draft a shared understanding of the narrative
         - [ ] what claim does the paper make? (e.g. contextual norms can be learned from human judgements and generalised to new situations via semantic features)
         - [ ] what is the key contribution? (e.g. COGEMI pipeline + dataset + evidence that agent identity / setting modulate appropriateness systematically)
@@ -132,6 +142,7 @@
         - [ ] which results will we show? (e.g. ternary distributions per scenario cluster, aspect-ranking patterns, cross-setting generalisation)
         - [ ] propose integration of pipeline outputs (generalisations etc) with broader CAVAA architecture - how it fits with the decision-making part and can be used to bias action selection
         - [ ] which venue / audience? (e.g. CogSci, NeurIPS alignment workshop, ICDL, IROS)
+    - [ ] GM to process Part 1 scenarios (yell × 8 settings) — aspects for `scenarios_manual_processing_1.md`
 
 ## From meetings
 - [x] check if Prolific has template for survey, or if can use google forms
