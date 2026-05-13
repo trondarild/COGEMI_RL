@@ -212,6 +212,7 @@ __marimo__/
 .RData
 .Rhistory
 *.R
+!statistics/**/*.R
 
 # Embedding cache (large, re-generated automatically)
 data/normbank_embeddings.npy
@@ -250,3 +251,4 @@ cogemi.egg-info/
 
 pw.txt
 linktest.txt
+.positai

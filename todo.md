@@ -108,9 +108,9 @@
 ### v2 database
 - [x] design `responses_v2` table with full v2 schema (no ALTER TABLE migrations needed)
     - [x] SQL in `appropriateness_survey_supabase_setup.sql`, includes RLS anon-insert policy
-- [ ] **create `responses_v2` table in Supabase** — run `CREATE TABLE responses_v2` block from `appropriateness_survey_supabase_setup.sql` in Supabase SQL editor
-- [ ] test v2 survey end-to-end against live `responses_v2` table (check rows appear with correct norm_type, response_value, confidence, is_repeat)
-- [ ] push `appropriateness_survey_aspects_park_prolific_v2.html` to GitHub Pages
+- [x] **create `responses_v2` table in Supabase** — run `CREATE TABLE responses_v2` block from `appropriateness_survey_supabase_setup.sql` in Supabase SQL editor
+- [x] test v2 survey end-to-end against live `responses_v2` table (check rows appear with correct norm_type, response_value, confidence, is_repeat)
+- [x] push `appropriateness_survey_aspects_park_prolific_v2.html` to GitHub Pages
 - [ ] update `data/prolific-survey-info.md` with v2 timing (~20–25 min) and recommended reward (~£3.00–£3.75)
 ### Pipeline changes
 - [x] add `norm_type: Optional[str]` field to `SurveyResponse` — "personal" | "injunctive" | "empirical"
@@ -132,6 +132,43 @@
 - [ ] **Calibration / anchoring vignettes**: add 4 fixed scenarios (positive anchor, negative anchor, boundary contrast, paraphrase repeat of one main scenario) to orient participants and enable cross-participant calibration; insert at fixed positions independent of shuffle
 - [ ] **Q7 — Forced-choice action ranking** (high effort, high RL value): for each scenario present 4–5 alternative actions and ask participant to rank from most to least appropriate; gives preference ordering suitable for Bradley-Terry / policy learning; requires per-scenario action alternatives to be authored
 - [ ] **Structured context schema**: store context dimensions as queryable fields alongside each row — `behavior`, `agent_constraint`, `setting`; can be derived from `scenario_id` at insert time in JS rather than requiring schema change
+## Statistical power analysis (R simulation)
+Goal: find the **minimum N (participants)** that gives adequate power across the key effects in the v2 survey — i.e. the smallest sample that is still scientifically justifiable, to minimise Prolific cost.
+
+### Survey structure to encode in simulation
+- 47 vignettes per participant (42 main + 5 retest; intra-participant consistency via 5 rewordings of one Q1 item)
+- Per vignette, 5 measures on 5-point Likert:
+  - Q1 personal appropriateness
+  - Q2 injunctive norm (others' judgment)
+  - Q3 realism / frequency ("how often do people behave this way")
+  - Q4 metacognitive certainty ("how certain are you of Q1")
+  - Q5 perceived disagreement ("how many people would disagree")
+- Contextual factorial (randomized between or within participants):
+  - agent identity: gender × role (2 levels each)
+  - relationship: friend / stranger / authority (3 levels)
+  - setting: public / private (2 levels)
+  - stakes: low / high (2 levels)
+
+### Tasks
+- [x] write `statistics/power-analysis/power_sim.R`: simulate v2 survey data under a mixed-effects DGM
+    - [x] DGM: random intercepts for participants and vignettes; fixed effects for contextual factors; 5-point Likert (continuous approximation via lmerTest)
+    - [x] simulate Q1–Q5 jointly (Q2 correlated with Q1 latent; Q4/Q5 driven by extremity of Q1)
+    - [x] simulate intra-item consistency: 5 rewordings per participant, ICC-parameterised noise (target ICC = 0.80)
+    - [x] contextual factorial: 2 (setting) × 3 (relationship) × 2 (stakes) = 12 cells; vignettes recycled
+- [x] define target effects encoded in BETA_MED: setting d≈0.40, rel-friend d≈0.50, rel-auth d≈0.30, stakes d≈0.30, Q1-Q2 divergence d≈0.25
+- [x] fit models: `lmerTest::lmer` for contextual effects; paired t-test for Q1–Q2 divergence; `performance::icc()` for reword ICC; Pearson r for retest
+- [x] run sweep: N = 20–100; 500 reps/N; small / medium / large effect-size scenarios
+- [x] minimum N = binding (max per-effect) at 80% power; sensitivity bounds from small/large scenarios
+- [x] outputs: `power_sim_results.csv`, `power_curves.pdf`, `reliability_curves.pdf`
+- [x] implement Dirichlet-multinomial simulation as `statistics/power-analysis/power_sim_dirichlet.R`
+    - [x] 5 norm-pattern priors; 3 hard boundary pairs; conjugate posterior update; `classify_pattern()` with 5-region geometry
+    - [x] outputs: `dirichlet_pattern_power.csv`, `dirichlet_boundary_power.csv`, `pattern_classification_power.pdf`, `boundary_classification_power.pdf`, `ambiguity_rate.pdf`
+- [ ] **run both simulations** from project root and record binding minimum N here:
+    - [ ] `Rscript statistics/power-analysis/power_sim.R` (mixed-effects, context factorial)
+    - [ ] `Rscript statistics/power-analysis/power_sim_dirichlet.R` (Dirichlet, pattern classification)
+    - [ ] binding N = max(lmer binding N, Dirichlet binding N)
+- [ ] update `data/prolific-survey-info.md` with recommended N and cost estimate from simulation output
+
 ## Communication and collaboration
 - [x] summarise progress so far and give examples of current scenario-data for social-appropriateness, morals-from-children's-books, justice
 - [ ] meeting with MK and GM — scheduled 2026-04-29 14:00 (follow up on outcomes)
