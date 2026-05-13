@@ -106,8 +106,11 @@ simulate_survey <- function(n_p, vd, beta) {
     stakes         = factor(vd$stakes[vi],       levels = c("low",      "high")),
     # Q1: personal appropriateness
     q1 = clip5(lat),
-    # Q2: injunctive norm — correlated with Q1 latent, slightly lower
-    q2 = clip5(lat + beta$q1_q2_offset + rnorm(n_obs, 0, 0.4)),
+    # Q2: injunctive norm — offset varies by vignette (realistic: some vignettes
+    # show larger personal-vs-injunctive gap than others); constant offset would
+    # make this trivially detectable by averaging over 42 vignettes
+    q2 = clip5(lat + rnorm(n_v, beta$q1_q2_offset, abs(beta$q1_q2_offset))[vi] +
+                 rnorm(n_obs, 0, 0.4)),
     # Q3: realism / frequency — independently distributed
     q3 = clip5(rnorm(n_obs, 3, 1)),
     # Q4: certainty — increases with extremity of Q1
@@ -159,13 +162,15 @@ extract_context_pvals <- function(main_data) {
   )
 }
 
-# Paired t-test on per-participant mean(Q1 - Q2) — tests personal vs injunctive divergence
+# Mixed model intercept test on (Q1 - Q2): accounts for participant and vignette
+# random effects; more conservative than paired t-test because vignette-level
+# variation in the offset is now modelled explicitly
 q1q2_pval <- function(main_data) {
   tryCatch({
-    d <- main_data |>
-      group_by(participant_id) |>
-      summarise(diff = mean(q1 - q2, na.rm = TRUE), .groups = "drop")
-    t.test(d$diff)$p.value
+    fit <- lmer(I(q1 - q2) ~ 1 + (1 | participant_id) + (1 | vignette_id),
+                data = main_data, REML = FALSE,
+                control = lmerControl(optimizer = "bobyqa"))
+    coef(summary(fit))["(Intercept)", "Pr(>|t|)"]
   }, error = function(e) NA_real_)
 }
 
@@ -181,12 +186,16 @@ retest_r <- function(main_data, retest_data) {
   }, error = function(e) NA_real_)
 }
 
-# ICC (adjusted) from one-way random effects model over 5 rewordings
+# ICC from variance components (VarCorr) — avoids performance::icc() which
+# behaves unexpectedly when clip5 truncation biases variance estimates with large N
 reword_icc_val <- function(reword_data) {
   tryCatch({
-    fit <- lmer(q1_reword ~ (1 | participant_id), data = reword_data,
-                control = lmerControl(optimizer = "bobyqa"))
-    performance::icc(fit)$ICC_adjusted
+    fit  <- lmer(q1_reword ~ 1 + (1 | participant_id), data = reword_data,
+                 control = lmerControl(optimizer = "bobyqa"))
+    vc   <- as.data.frame(VarCorr(fit))
+    vp   <- vc[vc$grp == "participant_id", "vcov"]
+    vr   <- vc[vc$grp == "Residual",       "vcov"]
+    vp / (vp + vr)
   }, error = function(e) NA_real_)
 }
 
@@ -290,6 +299,13 @@ message("\n── Minimum N per effect (80% power, medium effects) ────�
 print(as.data.frame(min_n_tbl))
 message("\nBinding minimum N: ", binding_n)
 message("Estimated Prolific cost @ £3.00/participant: £", binding_n * 3.00)
+message("
+NOTE — between-vignette design:
+Setting, relationship, and stakes are vignette-level predictors. Their power
+ceiling is determined by N_vignettes per condition (~21 per setting level,
+~14 per relationship level), NOT by N_participants. Adding participants beyond
+N=30 does not increase power for these effects. To reach 80% power for
+contextual effects you need more vignettes per cell (see section 11 below).")
 
 # ── 9. Power curves ─────────────────────────────────────────────────────────────
 
@@ -365,4 +381,87 @@ p_rel <- ggplot(plot_rel, aes(x = n, y = value, colour = metric)) +
 
 ggsave(file.path(OUT_DIR, "reliability_curves.pdf"), p_rel, width = 7, height = 5)
 message("Saved reliability_curves.pdf")
-message("\nDone. Binding minimum N = ", binding_n)
+
+# ── 11. Vignettes-per-cell sweep (N_participants fixed) ────────────────────────
+# Contextual effects are between-vignette: power scales with N_vignettes per
+# condition, not N_participants. This sweep shows the vignette requirement.
+
+VPC_GRID  <- c(3L, 5L, 7L, 10L, 15L, 20L)   # vignettes per cell
+N_P_FIXED <- 50L                              # held at Dirichlet recommendation
+N_CELLS   <- 12L                              # 2×3×2 factorial
+
+message("\n── Vignettes-per-cell sweep (N_participants = ", N_P_FIXED, " fixed) ──")
+
+vpc_raw <- map_dfr(VPC_GRID, function(vpc) {
+  vd_vpc <- make_vd(n = vpc * N_CELLS)
+  message("  vpc = ", vpc, appendLF = FALSE)
+  res <- map_dfr(seq_len(N_SIMS), function(i) {
+    main <- simulate_survey(N_P_FIXED, vd_vpc, BETA_MED)
+    pv   <- extract_context_pvals(main)
+    tibble(vpc = vpc,
+           p_setting    = pv["p_setting"],
+           p_rel_friend = pv["p_rel_friend"],
+           p_rel_auth   = pv["p_rel_auth"],
+           p_stakes     = pv["p_stakes"])
+  })
+  message("  done")
+  res
+})
+
+vpc_summary <- vpc_raw |>
+  group_by(vpc) |>
+  summarise(
+    power_setting    = mean(p_setting    < ALPHA, na.rm = TRUE),
+    power_rel_friend = mean(p_rel_friend < ALPHA, na.rm = TRUE),
+    power_rel_auth   = mean(p_rel_auth   < ALPHA, na.rm = TRUE),
+    power_stakes     = mean(p_stakes     < ALPHA, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+write.csv(vpc_summary, file.path(OUT_DIR, "contextual_power_by_nvignettes.csv"),
+          row.names = FALSE)
+
+message("\n── Contextual effects: min vignettes/cell for 80% power ───────────")
+vpc_effects <- c("power_setting", "power_rel_friend", "power_rel_auth", "power_stakes")
+vpc_names   <- c("Setting", "Rel: friend", "Rel: authority", "Stakes")
+min_vpc_tbl <- tibble(
+  effect    = vpc_names,
+  min_vpc   = map_int(vpc_effects, function(col) {
+    rows <- vpc_summary[vpc_summary[[col]] >= POWER_MIN, ]
+    if (nrow(rows) == 0L) return(NA_integer_)
+    min(rows$vpc)
+  })
+)
+print(as.data.frame(min_vpc_tbl))
+message("(Current survey has ~3.5 vignettes/cell with 42 vignettes in 12 cells)")
+
+plot_vpc <- vpc_summary |>
+  pivot_longer(all_of(vpc_effects), names_to = "effect", values_to = "power") |>
+  mutate(effect = recode(effect, !!!setNames(vpc_names, vpc_effects)))
+
+p_vpc <- ggplot(plot_vpc, aes(x = vpc, y = power, colour = effect)) +
+  geom_line(linewidth = 0.85) +
+  geom_point(size = 1.8) +
+  geom_hline(yintercept = POWER_MIN, linetype = "longdash",
+             colour = "grey35", linewidth = 0.45) +
+  annotate("text", x = min(VPC_GRID) + 0.2, y = POWER_MIN + 0.04,
+           label = "80%", colour = "grey35", size = 3, hjust = 0) +
+  scale_y_continuous(limits = c(0, 1), labels = percent_format(accuracy = 1)) +
+  scale_x_continuous(breaks = VPC_GRID) +
+  labs(
+    title    = "Contextual-effect power by vignettes per cell",
+    subtitle = paste0("N_participants = ", N_P_FIXED, " fixed; medium effects; ",
+                      N_SIMS, " reps; vertical axis: power for between-vignette contrast"),
+    x        = "Vignettes per contextual cell",
+    y        = "Statistical power",
+    colour   = NULL
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(legend.position = "bottom")
+
+ggsave(file.path(OUT_DIR, "contextual_power_by_nvignettes.pdf"),
+       p_vpc, width = 7, height = 5)
+message("Saved contextual_power_by_nvignettes.pdf")
+message("\nDone. Binding participant N = ", binding_n,
+        "; contextual effects need ~", max(min_vpc_tbl$min_vpc, na.rm = TRUE),
+        " vignettes/cell for 80% power.")
