@@ -163,10 +163,10 @@ Goal: find the **minimum N (participants)** that gives adequate power across the
 - [x] implement Dirichlet-multinomial simulation as `statistics/power-analysis/power_sim_dirichlet.R`
     - [x] 5 norm-pattern priors; 3 hard boundary pairs; conjugate posterior update; `classify_pattern()` with 5-region geometry
     - [x] outputs: `dirichlet_pattern_power.csv`, `dirichlet_boundary_power.csv`, `pattern_classification_power.pdf`, `boundary_classification_power.pdf`, `ambiguity_rate.pdf`
-- [ ] **run both simulations** from project root and record binding minimum N here:
-    - [ ] `Rscript statistics/power-analysis/power_sim.R` (mixed-effects, context factorial)
-    - [ ] `Rscript statistics/power-analysis/power_sim_dirichlet.R` (Dirichlet, pattern classification)
-    - [ ] binding N = max(lmer binding N, Dirichlet binding N)
+- [x] **run both simulations** from project root and record binding minimum N here:
+    - [x] `Rscript statistics/power-analysis/power_sim.R` (mixed-effects, context factorial) — participant-level binding N = 20; contextual effects are vignette-limited (flat with N), need 10 vpc = 120 total vignettes for 80% power on main effects (incomplete block design keeps per-participant burden at 42)
+    - [x] `Rscript statistics/power-analysis/power_sim_dirichlet.R` (Dirichlet, pattern classification) — binding N = 50 (90% power for directional patterns; polarized/flat inherently ambiguous due to broad Dirichlet priors)
+    - [x] binding N = max(20, 50) = **50** (Dirichlet is binding); contextual claims require 10 vpc (120 total vignettes), not more participants
 - [ ] update `data/prolific-survey-info.md` with recommended N and cost estimate from simulation output
 
 ## Communication and collaboration
