@@ -105,6 +105,11 @@
     - [x] appended after position 42 (total session: 47 items)
     - [x] `is_repeat` boolean column in `responses_v2`
 - [x] **Perceived disagreement** — 1–5 probe every 10 main scenarios; stored in `responses_v2`
+- [x] based on latest version, generate survey html files for each of the three arms of the survey where each arm is assigned a specific participant role: agent, target, observer
+    - [x] `appropriateness_survey_aspects_park_prolific_v2_agent.html` — Q1/Q2 framed from agent perspective; ROLE="agent" stored per row
+    - [x] `appropriateness_survey_aspects_park_prolific_v2_target.html` — framed from target (receiving end) perspective
+    - [x] `appropriateness_survey_aspects_park_prolific_v2_observer.html` — framed from outside observer perspective
+    - [ ] replace AGENT_CC_PLACEHOLDER / TARGET_CC_PLACEHOLDER / OBSERVER_CC_PLACEHOLDER with actual Prolific completion codes before going live
 ### v2 database
 - [x] design `responses_v2` table with full v2 schema (no ALTER TABLE migrations needed)
     - [x] SQL in `appropriateness_survey_supabase_setup.sql`, includes RLS anon-insert policy
