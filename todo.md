@@ -174,6 +174,10 @@ Goal: find the **minimum N (participants)** that gives adequate power across the
     - [x] binding N = max(20, 50) = **50** (Dirichlet is binding); contextual claims require 10 vpc (120 total vignettes), not more participants
 - [ ] update `data/prolific-survey-info.md` with recommended N and cost estimate from simulation output
 
+## Administration
+- [ ] fill out Prolific funds request form: 210 subjects total (180 main × 3 role arms + 30 pilot), ~£3.00/subject = £630 budget
+- [ ] give completed funds form to Awatef
+
 ## Communication and collaboration
 - [x] summarise progress so far and give examples of current scenario-data for social-appropriateness, morals-from-children's-books, justice
 - [ ] meeting with MK and GM — scheduled 2026-04-29 14:00 (follow up on outcomes)
