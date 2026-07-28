@@ -88,6 +88,18 @@
         - [ ] register role survey as separate Prolific study (or sub-condition) with updated survey URL including `?role=` param
     - [ ] update contexts: add that it's a special case when appropriate (e.g. a person leaving litter when get upsetting phone call)
     - [ ] approve pilot and pay Prolific to commence live experiment
+
+## Pre-registration (decide after the pilot)
+- [ ] evaluate whether to pre-register the survey once the pilot has run. Two things must exist first, and neither does yet:
+    - [ ] a clear hypothesis — what the role manipulation is predicted to do, stated sharply enough to be wrong. Directional, with the comparison and the outcome named.
+    - [ ] written documentation of the methodological issues, so they are declared rather than discovered by a reviewer:
+        - [ ] role assignment by server-side pool draw (`claim_role`, least-filled bin), giving disjoint arms of exactly 10/10/10; why one study rather than three
+        - [ ] target anchors: ~half the pool has no addressee, so each scenario names a position, tagged `directed` (17/40) or incidental (23/40). Targetedness is close to confounded with the action factor — kiss and money almost all directed, makeup and litter none — so the target–observer comparison must be made within each level, not pooled
+        - [ ] Q3 (empirical) vs Q2 (injunctive): the wording that keeps them apart, and what the pilot shows about whether participants held the distinction
+        - [ ] attention checks (2), test–retest repeats (5), and the exclusion rules applied to them
+        - [ ] N and its basis: binding N = 50 from the Dirichlet simulation, against a pilot of 30
+- [ ] if pre-registering: choose the venue (OSF / AsPredicted) and decide whether the pilot data are reported as such or held out
+
 ## Reference-level instrument upgrades (see reference-level-survey-requirements.md)
 ### Survey HTML changes — implemented in `appropriateness_survey_aspects_park_prolific_v2.html`
 - [x] **Construct separation** (non-optional per Bicchieri measurement standards)
@@ -176,6 +188,10 @@ Goal: find the **minimum N (participants)** that gives adequate power across the
 
 ## Administration
 - [ ] fill out Prolific funds request form: 210 subjects total (180 main × 3 role arms + 30 pilot), ~£3.00/subject = £630 budget
+ - [ ] identify contract name (CAVAA?)
+ - [ ] identify eotp number
+ - [ ] fill in info on scanned pdf copy
+ - [ ] send pdf to MK for signature
 - [ ] give completed funds form to Awatef
 
 ## Communication and collaboration

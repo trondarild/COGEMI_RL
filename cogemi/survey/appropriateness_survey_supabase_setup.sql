@@ -116,6 +116,18 @@ alter table responses_v2 add column if not exists target_directed boolean;
 
 create index if not exists responses_v2_target_directed_idx on responses_v2 (target_directed);
 
+-- ── Device capture ──────────────────────────────────────────────────────────
+-- Mobile, tablet and desktop are all permitted and the layout has no media
+-- queries, so on a narrow phone the 5-point scale wraps to 3 + 2 rows and the
+-- 3-point scale to 2 + 1. Recording the device class and the viewport width at
+-- entry lets the pilot show whether that changed the answers. Written on every
+-- row type. Safe to re-run.
+
+alter table responses_v2 add column if not exists device text;        -- mobile | tablet | desktop
+alter table responses_v2 add column if not exists viewport_w integer; -- css px at entry
+
+create index if not exists responses_v2_device_idx on responses_v2 (device);
+
 -- ── Role router (appropriateness_survey_aspects_park_prolific_v2_roles.html) ─
 -- Single Prolific study, role drawn server-side at entry. Prolific prevents a
 -- participant from submitting the same study twice, so one study with a
@@ -242,3 +254,141 @@ grant execute on function claim_role(text)         to anon;
 grant execute on function complete_role(text)      to anon;
 grant execute on function role_assignment_counts() to anon;
 grant execute on function purge_smoketest_data()   to anon;
+
+-- ── Session quality report ──────────────────────────────────────────────────
+-- Per-participant validity metrics for deciding who to pay. Returns no
+-- participant identifiers: the anon key is embedded in the published survey,
+-- so anything anon can call is effectively public, and prolific_ids must not
+-- be. Sessions are keyed by an 8-character hash instead; map back with
+--
+--   select left(md5(prolific_id), 8) as pid8, prolific_id
+--     from responses_v2 group by prolific_id;
+--
+-- Expected for a complete session: n_rows 146, n_q1 47, n_dis 4, done 1,
+-- chk_ok 4-5, chk_bad 1-2, distinct_q1 >= 3, sd_q1 > 0.5, mins 12-35.
+-- Safe to re-run.
+
+create or replace function session_quality_report()
+returns table (
+  pid8        text,
+  role        text,
+  device      text,
+  viewport_w  integer,
+  n_rows      bigint,
+  n_q1        bigint,
+  n_dis       bigint,
+  done        bigint,
+  mins        numeric,
+  chk_ok      integer,
+  chk_bad     integer,
+  distinct_q1 bigint,
+  sd_q1       numeric
+)
+language sql
+security definer
+set search_path = public
+as $$
+  with sess as (
+    select r.prolific_id,
+           max(r.role)       as role,
+           max(r.device)     as device,
+           max(r.viewport_w) as viewport_w,
+           count(*)                                               as n_rows,
+           count(*) filter (where r.norm_type = 'personal')       as n_q1,
+           count(*) filter (where r.norm_type = 'disagreement')   as n_dis,
+           count(*) filter (where r.scenario_id = '__completion__') as done,
+           round((extract(epoch from (max(r.created_at) - min(r.created_at))) / 60.0)::numeric, 1) as mins
+    from responses_v2 r
+    where r.prolific_id not like '\_\_smoketest\_\_%'
+    group by r.prolific_id
+  ),
+  checks as (
+    select r.prolific_id,
+           max(r.response_value) filter (where r.scenario_id = 'sa_check_appropriate')   as chk_ok,
+           max(r.response_value) filter (where r.scenario_id = 'sa_check_inappropriate') as chk_bad
+    from responses_v2 r
+    where r.norm_type = 'personal'
+      and r.scenario_id in ('sa_check_appropriate', 'sa_check_inappropriate')
+    group by r.prolific_id
+  ),
+  spread as (
+    select r.prolific_id,
+           count(distinct r.response_value)                  as distinct_q1,
+           round(stddev_samp(r.response_value)::numeric, 2)  as sd_q1
+    from responses_v2 r
+    where r.norm_type = 'personal'
+      and r.is_repeat = false
+      and r.scenario_id not in ('sa_check_appropriate', 'sa_check_inappropriate')
+    group by r.prolific_id
+  )
+  select left(md5(s.prolific_id), 8), s.role, s.device, s.viewport_w,
+         s.n_rows, s.n_q1, s.n_dis, s.done, s.mins,
+         c.chk_ok, c.chk_bad, sp.distinct_q1, sp.sd_q1
+  from sess s
+  left join checks  c  on c.prolific_id  = s.prolific_id
+  left join spread  sp on sp.prolific_id = s.prolific_id
+  order by s.mins;
+$$;
+
+revoke all on function session_quality_report() from public;
+grant execute on function session_quality_report() to anon;
+
+-- ── One-off data export ─────────────────────────────────────────────────────
+-- Pulls the pilot dataset out through PostgREST so it can be analysed locally.
+--
+-- Token-gated, and meant to be dropped as soon as the export is done:
+--
+--   drop function export_responses(text);
+--
+-- The anon key is embedded in the published survey, so an ungated function
+-- here would put the whole dataset on a public URL. Replace EXPORT_TOKEN below
+-- with something long and random before running, and do not commit the value.
+--
+-- Returns no prolific_ids — sessions are keyed by the same 8-character hash
+-- session_quality_report() uses, so the two join. Map back locally with:
+--
+--   select left(md5(prolific_id), 8) as pid8, prolific_id
+--     from responses_v2 group by prolific_id;
+
+create or replace function export_responses(token text)
+returns table (
+  pid8                   text,
+  role                   text,
+  device                 text,
+  viewport_w             integer,
+  study_id               text,
+  session_id             text,
+  scenario_id            text,
+  norm_type              text,
+  response               text,
+  response_value         integer,
+  confidence             integer,
+  perceived_disagreement integer,
+  aspect_ranking         text,
+  is_repeat              boolean,
+  target_directed        boolean,
+  created_at             timestamptz
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if token is null or token <> 'EXPORT_TOKEN' then
+    raise exception 'export_responses: bad token';
+  end if;
+
+  return query
+    select left(md5(r.prolific_id), 8), r.role, r.device, r.viewport_w,
+           r.study_id, r.session_id, r.scenario_id, r.norm_type, r.response,
+           r.response_value, r.confidence, r.perceived_disagreement,
+           r.aspect_ranking, r.is_repeat, r.target_directed, r.created_at
+    from responses_v2 r
+    where r.prolific_id not like '\_\_smoketest\_\_%'
+      and r.scenario_id <> '__completion__'
+    order by left(md5(r.prolific_id), 8), r.created_at;
+end
+$$;
+
+revoke all on function export_responses(text) from public;
+grant execute on function export_responses(text) to anon;

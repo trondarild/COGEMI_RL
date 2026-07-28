@@ -407,6 +407,54 @@ def test_target_directed_column_declared(sql):
 
 
 # ---------------------------------------------------------------------------
+# Device capture
+#
+# All three device classes are allowed and the layout has no media queries, so
+# the response scales wrap on a narrow phone. Recording what the participant
+# was on is what lets the pilot answer whether that mattered.
+# ---------------------------------------------------------------------------
+
+def test_device_detected_before_the_role_is_claimed(html):
+    init = _region(html, 'window.addEventListener("DOMContentLoaded"', "});")
+    assert "detectDevice();" in init, "device never captured"
+    assert init.index("detectDevice()") < init.index("assignRole()"), \
+        "capture must precede the claim, so the first row already carries it"
+
+
+def test_device_classes_are_the_three_expected(html):
+    body = _region(html, "function detectDevice()", "\n}")
+    for cls in ("mobile", "tablet", "desktop"):
+        assert f'"{cls}"' in body, f"no branch yields {cls}"
+    assert "maxTouchPoints" in body, "iPadOS 13+ reports as a Mac; needs the touch check"
+
+
+def test_viewport_width_taken_once_at_entry(html):
+    assert html.count("VIEWPORT_W = window.innerWidth") == 1, \
+        "width must be sampled once — rotating mid-session would give two values"
+
+
+@pytest.mark.parametrize("field", ["device", "viewport_w"])
+def test_device_fields_on_every_row_type(field, html):
+    submit = html[html.index("function submitScenario()"):]
+    scenario, rest = submit.split("if (state.disagreement !== null)", 1)
+    disagreement, completion = rest.split("function completeStudy()", 1)
+    assert field in scenario,     f"{field} missing from the scenario rows"
+    assert field in disagreement, f"{field} missing from the disagreement row"
+    assert field in completion,   f"{field} missing from the completion row"
+
+
+def test_consent_discloses_the_device_capture(html):
+    consent = _region(html, "<strong>Your data:</strong>", "</p>")
+    assert "device" in consent and "width of your browser window" in consent, \
+        "recording device data without saying so in the consent text"
+
+
+@pytest.mark.parametrize("decl", ["device text", "viewport_w integer"])
+def test_device_columns_declared(decl, sql):
+    assert f"add column if not exists {decl}" in sql
+
+
+# ---------------------------------------------------------------------------
 # Setup SQL backs the page
 # ---------------------------------------------------------------------------
 
@@ -442,8 +490,12 @@ def test_reclaim_only_touches_unfinished_claims(sql):
 def test_purge_prefix_is_not_a_parameter(sql):
     assert "create or replace function purge_smoketest_data()" in sql, \
         "purge must take no arguments, or anon could aim it at real rows"
-    body = sql[sql.index("function purge_smoketest_data("):]
-    assert body.count(r"like '\_\_smoketest\_\_%'") == 2
+    # Bounded to this function's own body: later functions filter on the same
+    # prefix, and a slice running to end of file would count theirs too.
+    start = sql.index("function purge_smoketest_data(")
+    body = sql[start:sql.index("$$;", start)]
+    assert body.count(r"like '\_\_smoketest\_\_%'") == 2, \
+        "purge must scope both deletes to the smoketest prefix, and nothing else"
 
 
 def test_rls_on_role_assignments(sql):

@@ -58,8 +58,8 @@ each level rather than pooling across items.
 | Per item | Q1 personal appropriateness (1–5), Q2 injunctive norm (1–5), Q3 empirical expectation (rarely/sometimes/often), confidence (1–5), rank 3 aspects |
 | Every 10 main scenarios | perceived-disagreement item (1–5) |
 | Estimated duration | 22 min |
-| Reward | £3.00 (£8.18/hr at 22 min — above the £6.00/hr Prolific floor, below the £9.00/hr "fair" mark; £3.30 buys the fair badge if you want it) |
-| Cost, pilot | 30 participants × £3.00 = £90 + ~33% fee ≈ **£120 total** |
+| Reward | £3.67 (£10.00/hr at 22 min — above the £9.00/hr "fair" mark) |
+| Cost, pilot | 30 participants × £3.67 = £110.10 + ~33% fee ≈ **£147 total** |
 
 ---
 
@@ -127,8 +127,12 @@ completion and then redirects every participant to an invalid Prolific URL.
 
 - Fluent English speakers
 - Approval rate ≥ 95%, minimum 10 previous submissions
-- Desktop/laptop only if the option is available — the aspect-ranking
-  interaction is awkward on a phone
+- Desktop, mobile and tablet all permitted. The layout has no media queries,
+  so on a narrow phone the 5-point scale wraps to 3 + 2 rows and the 3-point
+  scale to 2 + 1 — usable, but not the same stimulus as one continuous line.
+  `device` and `viewport_w` are recorded on every row so the pilot can show
+  whether it changed the answers; add a media query before the main study if
+  it did.
 - No arm exclusions needed. Disjointness comes from the study itself.
 
 ---
@@ -148,7 +152,7 @@ completion and then redirects every participant to an invalid Prolific URL.
    They write only `__smoketest__…` rows and purge themselves afterwards.
    Run them **before** publishing — the balance test claims 30 slots, and it
    refuses to run once real participants are in the pool.
-3. Confirm Prolific balance ≥ £120.
+3. Confirm Prolific balance ≥ £147.
 4. Create the study as a draft (30 places), note the completion code.
 5. `cogemi/survey/set_completion_code_roles.sh <CODE>` — patches both
    occurrences in the HTML.

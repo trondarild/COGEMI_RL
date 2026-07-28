@@ -162,6 +162,7 @@ def test_scenario_rows_insert(counts):
         "scenario_id": "yell_park_child", "language": "en",
         "aspect_ranking": "shouting loudly|a child playing|being in a public place",
         "is_repeat": False, "role": role, "target_directed": True,
+        "device": "desktop", "viewport_w": 1440,
     }
     for norm_type, response, value, extra in [
         ("personal",   "Appropriate", 4, {"confidence": 3}),
@@ -215,7 +216,8 @@ def test_every_posted_field_has_a_column():
     rows = html[html.index("function submitScenario()"):]
     fields = set(re.findall(r"^\s+(\w+):\s+\S", rows, re.M))
     assert {"prolific_id", "role", "norm_type", "completion_code",
-            "perceived_disagreement", "is_repeat", "target_directed"} <= fields, fields
+            "perceived_disagreement", "is_repeat", "target_directed",
+            "device", "viewport_w"} <= fields, fields
 
     for field in sorted(fields):
         url = f"{SUPABASE_URL}/rest/v1/responses_v2?select={field}&limit=1"

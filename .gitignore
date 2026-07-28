@@ -252,3 +252,9 @@ cogemi.egg-info/
 pw.txt
 linktest.txt
 .positai
+
+# Prolific demographic exports — participant IDs joined to age, sex, ethnicity,
+# nationality and employment. This repo is public; these must never enter it.
+# Survey responses under data/pilot-*/ are safe: participants are keyed by an
+# md5 prefix, not by Prolific ID.
+data/prolific_demographic_export_*.csv

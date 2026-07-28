@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CAVAA surveys — local test index</title>
+  <!--
+    Local test scaffolding. Not published: this must never become the landing
+    page of the live site. Serve with ./webserver.sh and open localhost:8000.
+
+    Three labelled arm links, without changing the survey or the database.
+
+    The survey draws its arm from claim_role() and has no way to be told which
+    one to use — deliberately, since a participant who could choose their arm
+    would break the design. So this page does not force a role. It claims fresh
+    __smoketest__ IDs until it holds one that came back "agent", one "target"
+    and one "observer", then labels each link with the role that ID actually
+    has. Clicking one is guaranteed to land in that arm, because claim_role()
+    is idempotent per ID.
+
+    From a balanced pool this takes exactly three claims: the draw picks the
+    least-filled bin, so three consecutive fresh IDs return one of each. If
+    real participants have already skewed the pool it takes more, and gives up
+    after twelve rather than filling the table with test rows.
+  -->
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+           max-width: 46rem; margin: 3rem auto; padding: 0 1.5rem; color: #222; line-height: 1.55; }
+    h1 { font-size: 1.35rem; margin-bottom: 0.3rem; }
+    h2 { font-size: 1rem; margin: 2rem 0 0.6rem; color: #444; }
+    p.note { color: #666; font-size: 0.88rem; }
+    ul { list-style: none; padding: 0; }
+    li { margin: 0.45rem 0; }
+    a { color: #2b6cb0; }
+    code { background: #f2f2f2; padding: 0.1rem 0.3rem; border-radius: 3px; font-size: 0.85em; }
+    .pid { font-family: ui-monospace, Menlo, monospace; font-size: 0.8rem; color: #888; }
+    .old a { color: #777; }
+    .arms { list-style: none; padding: 0; }
+    .arms li { margin: 0.5rem 0; display: flex; align-items: baseline; gap: 0.6rem; }
+    .role { display: inline-block; min-width: 5.2rem; font-weight: 700;
+            font-size: 0.72rem; letter-spacing: 0.07em; text-transform: uppercase;
+            color: #fff; background: #4a90d9; padding: 0.15rem 0.5rem; border-radius: 3px;
+            text-align: center; }
+    .role.unavailable { background: #bbb; }
+    button { font: inherit; padding: 0.35rem 0.8rem; margin-right: 0.5rem;
+             border: 1px solid #ccc; border-radius: 6px; background: #fff; cursor: pointer; }
+    button:hover { border-color: #2b6cb0; }
+    button:disabled { color: #999; cursor: default; border-color: #eee; }
+    table { border-collapse: collapse; font-size: 0.88rem; margin-top: 0.6rem; }
+    td, th { text-align: left; padding: 0.25rem 1.1rem 0.25rem 0; }
+    th { color: #666; font-weight: 600; }
+    #status { font-size: 0.85rem; color: #666; min-height: 1.2em; margin-top: 0.5rem; }
+  </style>
+</head>
+<body>
+
+<h1>CAVAA surveys — local test index</h1>
+<p class="note">Served locally. Rows still go to the live Supabase project, so
+every link below uses a <code>__smoketest__</code> ID that
+<code>purge_smoketest_data()</code> can remove.</p>
+
+<h2>Current study — one link per arm</h2>
+<ul class="arms" id="arm-links">
+  <li><span class="role" data-role="agent">agent</span>
+      <a data-role="agent" href="#">Role router — agent perspective</a>
+      <span class="pid" data-role="agent"></span></li>
+  <li><span class="role" data-role="target">target</span>
+      <a data-role="target" href="#">Role router — target perspective</a>
+      <span class="pid" data-role="target"></span></li>
+  <li><span class="role" data-role="observer">observer</span>
+      <a data-role="observer" href="#">Role router — observer perspective</a>
+      <span class="pid" data-role="observer"></span></li>
+</ul>
+<p class="note">Each link carries an ID the server has already assigned to that
+arm. The survey is unchanged and still draws its own role; it simply returns
+the assignment this ID already holds. Use “New participants” to draw a fresh
+set — the old IDs keep their arms, so an interrupted run can be resumed by
+going back to its link.</p>
+
+<h2>Assignment pool</h2>
+<div>
+  <button onclick="refresh()">Refresh counts</button>
+  <button id="btn-draw" onclick="drawArms()">New participants</button>
+  <button onclick="purge()">Purge smoketest rows</button>
+</div>
+<table id="counts"></table>
+<div id="status"></div>
+
+<h2>Retired — per-arm files</h2>
+<p class="note">Superseded by the router before their completion codes were
+set, and removed from the live site: they redirect to an invalid Prolific URL
+on completion. Kept here for comparison only.</p>
+<ul class="old">
+  <li><a class="plain" data-file="appropriateness_survey_aspects_park_prolific_v2_agent.html" href="#">Agent arm</a></li>
+  <li><a class="plain" data-file="appropriateness_survey_aspects_park_prolific_v2_target.html" href="#">Target arm</a></li>
+  <li><a class="plain" data-file="appropriateness_survey_aspects_park_prolific_v2_observer.html" href="#">Observer arm</a></li>
+  <li><a class="plain" data-file="appropriateness_survey_aspects_park_prolific_v2.html" href="#">v2 single-arm</a></li>
+</ul>
+
+<h2>Older instruments</h2>
+<ul class="old">
+  <li><a class="plain" data-file="appropriateness_survey_aspects_park_prolific.html" href="#">v1 park pilot</a></li>
+  <li><a class="plain" data-file="appropriateness_survey_aspects_park_role_prolific.html" href="#">Park role pilot</a></li>
+  <li><a href="appropriateness_survey_aspects_ghpages.html">Aspect ranking (no Prolific)</a></li>
+  <li><a href="role_survey_ghpages.html">Role perspectives (no Prolific)</a></li>
+  <li><a href="appropriateness_survey_ghpages.html">Base appropriateness (no Prolific)</a></li>
+</ul>
+
+<script>
+var SUPABASE_URL = "https://bcrssdaahemdueuqnnbt.supabase.co";
+var SUPABASE_KEY = "sb_publishable_Rm0HnRFPxHraszzsp9bjkA_g2JMCkd-";
+var ROLES_FILE   = "appropriateness_survey_aspects_park_prolific_v2_roles.html";
+var ROLES        = ["agent", "target", "observer"];
+var MAX_DRAWS    = 12;
+
+function newPid() {
+  return "__smoketest__local" + Math.random().toString(16).slice(2, 10);
+}
+
+function params(p) {
+  return "?PROLIFIC_PID=" + p + "&STUDY_ID=localtest&SESSION_ID=" + Date.now();
+}
+
+function setStatus(msg) { document.getElementById("status").textContent = msg; }
+
+function each(sel, fn) { document.querySelectorAll(sel).forEach(fn); }
+
+function rpc(fn, args) {
+  return fetch(SUPABASE_URL + "/rest/v1/rpc/" + fn, {
+    method: "POST",
+    headers: {
+      "apikey":        SUPABASE_KEY,
+      "Authorization": "Bearer " + SUPABASE_KEY,
+      "Content-Type":  "application/json"
+    },
+    body: JSON.stringify(args || {})
+  }).then(function(r) {
+    if (!r.ok) return r.text().then(function(t) { throw new Error(t); });
+    return r.json();
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Draw until every arm is covered. Nothing here forces a role: it claims fresh
+// IDs and keeps the first one that comes back for each arm.
+// ---------------------------------------------------------------------------
+function drawArms() {
+  var held = {};
+  var draws = 0;
+  document.getElementById("btn-draw").disabled = true;
+  each(".arms a", function(a) { a.href = "#"; a.style.pointerEvents = "none"; });
+  each(".arms .pid", function(s) { s.textContent = ""; });
+  each(".arms .role", function(s) { s.classList.add("unavailable"); });
+  setStatus("drawing one participant per arm…");
+
+  function step() {
+    var missing = ROLES.filter(function(r) { return !held[r]; });
+    if (missing.length === 0) {
+      finish(held, draws, null);
+      return;
+    }
+    if (draws >= MAX_DRAWS) {
+      finish(held, draws, missing);
+      return;
+    }
+    draws++;
+    var p = newPid();
+    rpc("claim_role", { pid: p })
+      .then(function(role) {
+        if (!held[role]) held[role] = p;
+        step();
+      })
+      .catch(function(e) {
+        document.getElementById("btn-draw").disabled = false;
+        setStatus("draw failed: " + e.message);
+      });
+  }
+  step();
+}
+
+function finish(held, draws, missing) {
+  ROLES.forEach(function(role) {
+    var p = held[role];
+    each('.arms [data-role="' + role + '"]', function(el) {
+      if (el.tagName === "A") {
+        el.href = p ? ROLES_FILE + params(p) : "#";
+        el.style.pointerEvents = p ? "" : "none";
+      } else if (el.classList.contains("pid")) {
+        el.textContent = p || "not drawn";
+      } else {
+        el.classList.toggle("unavailable", !p);
+      }
+    });
+  });
+
+  // The retired and older files ignore claim_role, so any ID will do.
+  var spare = newPid();
+  each("a.plain", function(a) { a.href = a.dataset.file + params(spare); });
+
+  document.getElementById("btn-draw").disabled = false;
+  if (missing) {
+    setStatus("gave up after " + draws + " draws — no ID came back as " +
+              missing.join(" or ") + ". Real participants are probably " +
+              "skewing the pool; purge smoketest rows and check the counts.");
+  } else {
+    setStatus("three arms covered in " + draws + " draws");
+  }
+  refresh();
+}
+
+function refresh() {
+  rpc("role_assignment_counts")
+    .then(function(rows) {
+      var html = "<tr><th>role</th><th>claimed</th><th>completed</th><th>smoketest</th></tr>";
+      rows.forEach(function(r) {
+        html += "<tr><td>" + r.role + "</td><td>" + r.claimed + "</td><td>" +
+                r.completed + "</td><td>" + r.smoketest + "</td></tr>";
+      });
+      document.getElementById("counts").innerHTML = html;
+    })
+    .catch(function(e) { setStatus("could not read counts: " + e.message); });
+}
+
+function purge() {
+  if (!confirm("Delete all __smoketest__ rows from role_assignments and responses_v2?")) return;
+  rpc("purge_smoketest_data")
+    .then(function(n) { setStatus("purged " + n + " assignment(s)"); drawArms(); })
+    .catch(function(e) { setStatus("purge failed: " + e.message); });
+}
+
+drawArms();
+
+// Coming back with the browser's back button restores this page from the
+// back/forward cache without re-running the script, which would leave the
+// links pointing at IDs that have already been through the survey.
+window.addEventListener("pageshow", function(e) { if (e.persisted) drawArms(); });
+</script>
+
+</body>
+</html>

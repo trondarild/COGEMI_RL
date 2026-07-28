@@ -186,7 +186,7 @@
     <p id="role-intro"></p>
     <p>You will read <strong>~47 short vignettes</strong> set in a public park. For each one you will be asked four quick questions: how appropriate you find the action, what you think others would consider appropriate, how common the behaviour is, and how certain you are of your judgement. You will then identify which aspect of the situation most influenced you.</p>
     <p>The study takes approximately <strong>20–25 minutes</strong>. There are no right or wrong answers.</p>
-    <p><strong>Your data:</strong> Responses are stored securely and linked only to your Prolific ID, which will be removed from the analysis dataset after payment. Participation is voluntary; you may withdraw at any time.</p>
+    <p><strong>Your data:</strong> Responses are stored securely and linked only to your Prolific ID, which will be removed from the analysis dataset after payment. We also record the type of device you are using and the width of your browser window, so that we can check whether the layout affected your answers. Participation is voluntary; you may withdraw at any time.</p>
     <p class="small">This research is conducted by ISIR, Sorbonne Université. If you have questions, contact <a href="mailto:tjostheim@isir.upmc.fr">tjostheim@isir.upmc.fr</a>.</p>
     <div style="margin-top:1.25rem">
       <label><input type="checkbox" id="consent-check" style="width:auto;margin-right:0.5rem">
@@ -269,8 +269,8 @@
 // ---------------------------------------------------------------------------
 var SUPABASE_URL        = "https://bcrssdaahemdueuqnnbt.supabase.co";
 var SUPABASE_ANON_KEY   = "sb_publishable_Rm0HnRFPxHraszzsp9bjkA_g2JMCkd-";
-var PROLIFIC_RETURN_URL = "https://app.prolific.com/submissions/complete?cc=ROLES_CC_PLACEHOLDER";
-var COMPLETION_CODE     = "ROLES_CC_PLACEHOLDER";
+var PROLIFIC_RETURN_URL = "https://app.prolific.com/submissions/complete?cc=CMZU9JD5";
+var COMPLETION_CODE     = "CMZU9JD5";
 
 // Assigned by claim_role() before consent is shown; never hard-coded.
 var ROLE = null;
@@ -382,8 +382,39 @@ var SESSION_ID   = urlParams.get("SESSION_ID")   || "";
 
 window.addEventListener("DOMContentLoaded", function() {
   if (!PROLIFIC_PID) { show("page-invalid"); return; }
+  detectDevice();
   assignRole();
 });
+
+// ---------------------------------------------------------------------------
+// Device capture
+//
+// Mobile, tablet and desktop are all permitted, and the layout has no media
+// queries: it relies on flex-wrap, so on a narrow phone the 5-point scale
+// breaks to 3 + 2 rows and the 3-point scale to 2 + 1. A Likert scale read as
+// two rows is not the same stimulus as one line, so both the device class and
+// the viewport width are recorded and the pilot can show whether it mattered.
+// Width is taken once, at entry: rotating mid-session would otherwise give a
+// participant two different values.
+// ---------------------------------------------------------------------------
+var DEVICE     = null;
+var VIEWPORT_W = null;
+
+function detectDevice() {
+  var ua    = navigator.userAgent;
+  var touch = ("ontouchstart" in window) || navigator.maxTouchPoints > 1;
+  if (/iPad|Tablet|PlayBook|Silk/i.test(ua) ||
+      (/Android/i.test(ua) && !/Mobile/i.test(ua))) {
+    DEVICE = "tablet";
+  } else if (/Mobi|iPhone|iPod|Android|BlackBerry|IEMobile|Opera Mini/i.test(ua)) {
+    DEVICE = "mobile";
+  } else if (/Macintosh/.test(ua) && touch) {
+    DEVICE = "tablet";              // iPadOS 13+ reports itself as a Mac
+  } else {
+    DEVICE = "desktop";
+  }
+  VIEWPORT_W = window.innerWidth || null;
+}
 
 // ---------------------------------------------------------------------------
 // Role assignment — server-side pool draw, idempotent on PROLIFIC_PID
@@ -913,7 +944,9 @@ function submitScenario() {
     role:        ROLE,
     // Item property, recorded on every arm so the analysis can compare the
     // target-observer gap separately for directed and incidental actions.
-    target_directed: anchor ? anchor.directed : null
+    target_directed: anchor ? anchor.directed : null,
+    device:      DEVICE,
+    viewport_w:  VIEWPORT_W
   };
 
   var rows = [
@@ -944,7 +977,9 @@ function submitScenario() {
       norm_type:              "disagreement",
       perceived_disagreement: state.disagreement,
       language:               "en",
-      role:                   ROLE
+      role:                   ROLE,
+      device:                 DEVICE,
+      viewport_w:             VIEWPORT_W
     });
   }
 
@@ -979,7 +1014,9 @@ function completeStudy() {
     scenario_id:     "__completion__",
     response:        "completed",
     completion_code: COMPLETION_CODE,
-    role:            ROLE
+    role:            ROLE,
+    device:          DEVICE,
+    viewport_w:      VIEWPORT_W
   })
   .then(function()  { return rpc("complete_role", { pid: PROLIFIC_PID }); })
   .then(function()  { window.location.href = PROLIFIC_RETURN_URL; })
