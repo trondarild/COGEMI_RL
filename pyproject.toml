@@ -18,3 +18,8 @@ dependencies = [
     "tqdm",
     "tabulate",
 ]
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: hits a live service; skipped unless its env guard is set",
+]

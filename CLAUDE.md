@@ -56,6 +56,26 @@ Observation  →  TextAbstraction  →  Scenario
 - `cogemi/survey/survey_response.py` — used throughout the pipeline (has `response: str` field)
 - `cogemi/evaluation/response.py` — `EvaluationSurveyResponse`, inherits `Observation`, not currently wired into the pipeline
 
+### Publishing survey pages
+
+The live survey site is the GitHub Pages repo `~/code/trondarild.github.io`,
+serving `cavaa/` at `https://trondarild.github.io/cavaa/`. Files in
+`cogemi/survey/` are the source of truth; the Pages repo is a deployment
+target, not a place to edit.
+
+Publish only through `cogemi/survey/deploy_to_pages.sh`. It copies an explicit
+manifest, commits and pushes, and first refuses any file still carrying a
+`*_CC_PLACEHOLDER`, checks the inline JS parses, and runs the structural
+tests. Copying by hand skips all of that, and the failure it guards against —
+a live study redirecting every participant to an invalid Prolific submission
+URL — is silent and costs the whole run.
+
+Patching a completion code (`set_completion_code_roles.sh`) and publishing are
+deliberately separate steps. Do not merge them.
+
+The survey directory also holds credentials and the Supabase schema, which is
+why the deploy manifest is an explicit list rather than a glob.
+
 ### LLM configuration
 
 `cogemi/config.py` searches for `cogemi_config.yaml` in: explicit path → `COGEMI_CONFIG` env var → `./cogemi_config.yaml` → `~/.cogemi_config.yaml`. `COGEMI_API_KEY` env var overrides `api_key` from file. Supported providers: `ollama` (default), `openai` (requires `pip install openai`).

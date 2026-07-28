@@ -95,3 +95,139 @@ create policy "anon insert"
   for insert
   to anon
   with check (true);
+
+-- ── Role arms (v2_agent / v2_target / v2_observer) ──────────────────────────
+-- Required before the role-arm pilot: the arm files post a `role` field on
+-- every scenario row, and PostgREST rejects the whole insert if the column
+-- is absent. Safe to re-run.
+
+alter table responses_v2 add column if not exists role text;   -- "agent" | "target" | "observer"
+
+create index if not exists responses_v2_role_idx on responses_v2 (role);
+
+-- ── Role router (appropriateness_survey_aspects_park_prolific_v2_roles.html) ─
+-- Single Prolific study, role drawn server-side at entry. Prolific prevents a
+-- participant from submitting the same study twice, so one study with a
+-- server-side draw guarantees disjoint arms; three separate studies do not,
+-- because the "exclude previous participants" prescreener is unreliable for
+-- concurrently running studies.
+--
+-- Run this whole section once. Every statement is safe to re-run.
+
+create table if not exists role_assignments (
+  prolific_id  text primary key,
+  role         text not null check (role in ('agent','target','observer')),
+  claimed_at   timestamptz not null default now(),
+  completed_at timestamptz
+);
+
+create index if not exists role_assignments_role_idx on role_assignments (role);
+
+-- No policies: anon reaches this table only through the functions below,
+-- which run as the table owner and so bypass RLS.
+alter table role_assignments enable row level security;
+
+-- How long an unfinished claim holds its slot before the pool reclaims it.
+-- The instrument runs ~22 min, so two hours leaves ample headroom while still
+-- releasing slots abandoned by returns and timeouts.
+--
+-- claim_role: idempotent on prolific_id (a reload returns the same role) and
+-- serialised by an advisory lock, so concurrent entrants cannot both read the
+-- same "least filled" count and land in the same arm.
+create or replace function claim_role(pid text)
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare r text;
+begin
+  if pid is null or btrim(pid) = '' then
+    raise exception 'claim_role: prolific_id required';
+  end if;
+
+  select role into r from role_assignments where prolific_id = pid;
+  if r is not null then return r; end if;
+
+  perform pg_advisory_xact_lock(hashtext('claim_role'));
+
+  -- re-check under the lock
+  select role into r from role_assignments where prolific_id = pid;
+  if r is not null then return r; end if;
+
+  delete from role_assignments
+   where completed_at is null
+     and claimed_at < now() - interval '2 hours';
+
+  select a.role into r
+    from (values ('agent'),('target'),('observer')) as a(role)
+    left join role_assignments ra on ra.role = a.role
+   group by a.role
+   order by count(ra.prolific_id), random()
+   limit 1;
+
+  insert into role_assignments (prolific_id, role) values (pid, r);
+  return r;
+end
+$$;
+
+-- complete_role: pins the claim so the reclaim sweep can never free a slot
+-- that has already produced data.
+create or replace function complete_role(pid text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update role_assignments
+     set completed_at = coalesce(completed_at, now())
+   where prolific_id = pid;
+end
+$$;
+
+-- role_assignment_counts: aggregate only, no participant identifiers. Used by
+-- the integration tests and for watching the pilot fill.
+create or replace function role_assignment_counts()
+returns table (role text, claimed bigint, completed bigint, smoketest bigint)
+language sql
+security definer
+set search_path = public
+as $$
+  select a.role,
+         count(ra.prolific_id)                                             as claimed,
+         count(ra.completed_at)                                            as completed,
+         count(*) filter (where ra.prolific_id like '\_\_smoketest\_\_%')  as smoketest
+    from (values ('agent'),('target'),('observer')) as a(role)
+    left join role_assignments ra on ra.role = a.role
+   group by a.role
+   order by a.role;
+$$;
+
+-- purge_smoketest_data: lets the integration tests clean up after themselves.
+-- The prefix is fixed, not a parameter, so this can only ever remove rows a
+-- test created — real Prolific IDs are 24 hex characters and never match.
+create or replace function purge_smoketest_data()
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare n integer;
+begin
+  delete from role_assignments where prolific_id like '\_\_smoketest\_\_%';
+  get diagnostics n = row_count;
+  delete from responses_v2     where prolific_id like '\_\_smoketest\_\_%';
+  return n;
+end
+$$;
+
+revoke all on function claim_role(text)          from public;
+revoke all on function complete_role(text)       from public;
+revoke all on function role_assignment_counts()  from public;
+revoke all on function purge_smoketest_data()    from public;
+
+grant execute on function claim_role(text)         to anon;
+grant execute on function complete_role(text)      to anon;
+grant execute on function role_assignment_counts() to anon;
+grant execute on function purge_smoketest_data()   to anon;
