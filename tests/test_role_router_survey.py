@@ -496,16 +496,32 @@ def test_manifest_publishes_nothing_but_html(deploy):
         assert secret not in block, f"{secret} must never be deployed"
 
 
-def test_superseded_arms_are_opt_in(deploy):
-    """They still carry placeholders, so they would block every deploy if the
-    default manifest listed them."""
-    manifest = _manifest(deploy)
-    for role in ROLES:
-        arm = f"appropriateness_survey_aspects_park_prolific_v2_{role}.html"
-        assert arm not in manifest, f"{arm} must not deploy by default"
-        assert arm in deploy, f"{arm} should still be reachable with --only"
-    assert "SUPERSEDED=(" in deploy
-    assert 'for f in "${MANIFEST[@]}" "${SUPERSEDED[@]}"' in deploy
+RETIRED = [f"appropriateness_survey_aspects_park_prolific_v2_{r}.html" for r in ROLES] \
+          + ["appropriateness_survey_local_test.html"]
+
+
+@pytest.mark.parametrize("name", RETIRED)
+def test_retired_pages_cannot_be_published(name, deploy):
+    """The three arms carry completion-code placeholders and the local-test
+    harness was never meant to be public. All four were removed from the live
+    site; --only must refuse to put them back."""
+    assert name not in _manifest(deploy), f"{name} must not deploy by default"
+    block = deploy[deploy.index("UNPUBLISHABLE=("):deploy.index(")", deploy.index("UNPUBLISHABLE=("))]
+    assert name in block, f"{name} not listed as unpublishable"
+
+
+def test_only_flag_checks_the_retired_list_first(deploy):
+    guard = deploy[deploy.index('if [ -n "$ONLY" ]'):deploy.index('FILES=("$ONLY")')]
+    assert 'for f in "${UNPUBLISHABLE[@]}"' in guard, "--only does not consult the retired list"
+    assert guard.index("UNPUBLISHABLE") < guard.index("MANIFEST"), \
+        "the retired check must run before the manifest lookup"
+
+
+def test_arms_stay_in_the_repo():
+    """Deleting them would turn the invariance tests into skips: a green suite
+    that has stopped checking the merge."""
+    assert AGENT_ARM.exists(), "the agent arm backs six byte-for-byte comparisons"
+    assert V2_BASE.exists(), "the v2 base backs the scenario-pool and Q3 checks"
 
 
 def test_deploy_refuses_placeholders(deploy):

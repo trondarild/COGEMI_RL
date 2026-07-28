@@ -43,18 +43,20 @@ MANIFEST=(
   appropriateness_survey_aspects_park_role_prolific.html          # role-perspectives pilot
   appropriateness_survey_aspects_ghpages.html
   appropriateness_survey_ghpages.html
-  appropriateness_survey_local_test.html
   role_survey_ghpages.html
 )
 
-# Deployable only with --only. The three per-arm files were superseded by the
-# router before their completion codes were ever set, so they still carry
-# placeholders and would block every deploy if they sat in the manifest. Old
-# copies remain on the live site, unreferenced by any Prolific study.
-SUPERSEDED=(
+# The three per-arm files stay in cogemi/survey/ — the agent arm is what the
+# structural tests compare the router against — but they are not publishable.
+# They were superseded before their completion codes were ever set, so a
+# participant who reached one and finished would be sent to an invalid Prolific
+# URL and lose the submission. Their live copies were removed for that reason;
+# --only refuses them so they cannot be put back by hand.
+UNPUBLISHABLE=(
   appropriateness_survey_aspects_park_prolific_v2_agent.html
   appropriateness_survey_aspects_park_prolific_v2_target.html
   appropriateness_survey_aspects_park_prolific_v2_observer.html
+  appropriateness_survey_local_test.html
 )
 
 DRY_RUN=0
@@ -73,8 +75,14 @@ done
 
 if [ -n "$ONLY" ]; then
   ONLY="$(basename "$ONLY")"
+  for f in "${UNPUBLISHABLE[@]}"; do
+    if [ "$f" = "$ONLY" ]; then
+      echo "refusing: '$ONLY' is retired and must not go back on the live site" >&2
+      exit 1
+    fi
+  done
   found=0
-  for f in "${MANIFEST[@]}" "${SUPERSEDED[@]}"; do [ "$f" = "$ONLY" ] && found=1; done
+  for f in "${MANIFEST[@]}"; do [ "$f" = "$ONLY" ] && found=1; done
   if [ "$found" -eq 0 ]; then
     echo "refusing: '$ONLY' is not in the manifest — add it to deploy_to_pages.sh first" >&2
     exit 1
