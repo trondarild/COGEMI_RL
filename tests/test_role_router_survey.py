@@ -262,6 +262,45 @@ def test_scale_labels_unchanged(html):
     assert '"Rarely", "Sometimes", "Often"' in html
 
 
+# ---------------------------------------------------------------------------
+# Q3 asks about frequency, not approval
+#
+# Q3 is the empirical expectation and Q2 the injunctive one. The earlier
+# wording, "how often do you think people actually behave this way", could be
+# read as asking how often people hold that attitude, which would make Q3 a
+# second injunctive item and correlate the two for the wrong reason.
+# ---------------------------------------------------------------------------
+
+Q3_QUESTION = ("Setting aside whether it is appropriate &#8212; how often do you "
+               "think the action described <em>actually</em> happens in similar "
+               "situations?")
+
+
+@pytest.mark.parametrize("path", [ROUTER, V2_BASE])
+def test_q3_separates_frequency_from_approval(path):
+    text = path.read_text(encoding="utf-8")
+    assert Q3_QUESTION in text, f"{path.name}: Q3 wording drifted"
+    assert "behave this way in similar situations" not in text, \
+        f"{path.name}: the ambiguous Q3 wording is back"
+
+
+def test_consent_names_the_institution_and_a_contact(html):
+    """A live consent form must not ship template placeholders."""
+    assert "[Institution]" not in html and "[email]" not in html, \
+        "consent text still carries an unfilled placeholder"
+    assert "ISIR, Sorbonne Université" in html
+    assert "mailto:tjostheim@isir.upmc.fr" in html
+
+
+def test_q3_is_arm_neutral(html):
+    """'the action described' has one referent in every arm. A pronoun for the
+    actor would leave the target participant unsure whose behaviour is meant."""
+    q3 = _region(html, '<div id="q3-phase"', "</div>")
+    for word in ("you", "yourself", "people in your position"):
+        assert not re.search(rf"\b{word}\b", q3.replace("do you think", "")), \
+            f"Q3 addresses the participant's own position via '{word}'"
+
+
 def _region(text, start, end):
     i = text.index(start)
     return text[i:text.index(end, i)]
