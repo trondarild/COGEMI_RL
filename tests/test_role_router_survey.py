@@ -73,13 +73,13 @@ EXPECTED_LABEL = {
 
 EXPECTED_Q1 = {
     "agent":    "Imagining yourself as the person performing this action",
-    "target":   "Imagining yourself as the person this action is directed at",
+    "target":   "Imagining yourself as the person named under the situation",
     "observer": "Imagining yourself as an outside observer",
 }
 
 EXPECTED_Q2 = {
     "agent":    "in the same position (performing this action)",
-    "target":   "on the receiving end",
+    "target":   "in that position",
     "observer": "observing this situation",
 }
 
@@ -107,17 +107,35 @@ def test_all_role_framings_present(role, table, name, html):
     assert table[role] in html, f"{name} for '{role}' missing"
 
 
+# The target framing was rewritten after the merge: the arm assumed every
+# action has an addressee, which fails for the half of the pool that has none.
+# Agent and observer must still match their arms verbatim.
+UNCHANGED_FROM_ARMS = ["agent", "observer"]
+
+
 def test_framings_carried_over_verbatim_from_the_arms():
     """Every framing string must match the arm file it came from, so the merge
     cannot have quietly reworded an arm."""
     router = ROUTER.read_text(encoding="utf-8")
-    for role in ROLES:
+    for role in UNCHANGED_FROM_ARMS:
         arm = (SURVEY_DIR / f"appropriateness_survey_aspects_park_prolific_v2_{role}.html")
         if not arm.exists():          # arms may be retired once the router ships
             pytest.skip(f"{arm.name} no longer present")
         arm_html = arm.read_text(encoding="utf-8")
         for table in (EXPECTED_LABEL, EXPECTED_Q1, EXPECTED_Q2, EXPECTED_CONSENT):
             assert table[role] in arm_html and table[role] in router
+
+
+def test_target_framing_deliberately_differs_from_its_arm():
+    """The one arm the merge was allowed to reword, and only in the two places
+    that assumed an addressee."""
+    arm = SURVEY_DIR / "appropriateness_survey_aspects_park_prolific_v2_target.html"
+    if not arm.exists():
+        pytest.skip(f"{arm.name} no longer present")
+    arm_html = arm.read_text(encoding="utf-8")
+    assert "Imagining yourself as the person this action is directed at" in arm_html
+    assert EXPECTED_LABEL["target"] in arm_html
+    assert EXPECTED_CONSENT["target"] in arm_html
 
 
 def test_no_role_is_hard_coded(html):
@@ -262,6 +280,12 @@ INVARIANT_REGIONS = {
 }
 
 
+# The router adds one stylesheet rule the arms never had: the target-arm
+# anchor box. Removing it must leave the agent arm's stylesheet exactly.
+ANCHOR_CSS = re.compile(
+    r"\n +/\* Target arm only[^\n]*\n +\.target-anchor \{.*?\n +\}\n", re.S)
+
+
 @pytest.mark.parametrize("name", list(INVARIANT_REGIONS))
 def test_instrument_unchanged_by_the_merge(name):
     if not AGENT_ARM.exists():
@@ -269,7 +293,78 @@ def test_instrument_unchanged_by_the_merge(name):
     start, end = INVARIANT_REGIONS[name]
     router = _region(ROUTER.read_text(encoding="utf-8"), start, end)
     agent  = _region(AGENT_ARM.read_text(encoding="utf-8"), start, end)
+    if name == "stylesheet":
+        router, n = ANCHOR_CSS.subn("\n", router)
+        assert n == 1, "target-anchor rule missing or no longer matched"
     assert router == agent, f"{name} differs between the agent arm and the router"
+
+
+# ---------------------------------------------------------------------------
+# Target anchors
+#
+# About half the pool has no addressee — nobody is on the receiving end of
+# someone applying makeup or leaving litter. Each scenario therefore names one
+# position for the target arm, tagged directed (the action is aimed at that
+# person) or incidental (it merely lands on them).
+# ---------------------------------------------------------------------------
+
+def _anchors(text):
+    block = _region(text, "var TARGET_ANCHORS = {", "\n};")
+    return {
+        m.group(1): (m.group(2), m.group(3) == "true")
+        for m in re.finditer(
+            r'(\w+):\s*\{ who:"([^"]+)",\s*directed:(true|false)\s*\}', block)
+    }
+
+
+def test_every_scenario_has_an_anchor(html):
+    anchors = _anchors(html)
+    missing = [i for i in _scenario_ids(html) if i not in anchors]
+    assert not missing, f"no target anchor for: {missing}"
+
+
+def test_no_anchor_without_a_scenario(html):
+    ids = set(_scenario_ids(html))
+    orphans = [k for k in _anchors(html) if k not in ids]
+    assert not orphans, f"anchor for unknown scenario: {orphans}"
+
+
+def test_anchors_name_a_person(html):
+    for sid, (who, _) in _anchors(html).items():
+        assert len(who) > 5, f"{sid}: anchor too thin to locate a position"
+        assert not who.endswith("."), f"{sid}: anchor supplies its own full stop"
+
+
+def test_both_directedness_levels_are_populated(html):
+    directed = [d for _, d in _anchors(html).values()]
+    assert directed.count(True) >= 8, "too few directed items to test within"
+    assert directed.count(False) >= 8, "too few incidental items to test within"
+
+
+def test_anchor_shown_only_in_the_target_arm(html):
+    body = _region(html, "function renderTargetAnchor(s)", "\n}")
+    assert 'ROLE !== "target"' in body, "anchor not gated on the target arm"
+    assert 'classList.add("hidden")' in body, "no arm hides the anchor box"
+    assert '<div class="target-anchor hidden" id="target-anchor">' in html, \
+        "anchor box must start hidden so a stalled claim cannot leak it"
+    assert "renderTargetAnchor(s)" in _region(
+        html, "function renderScenario()", "\n}"), "anchor never rendered"
+
+
+def test_target_framing_covers_incidental_items(html):
+    target = _region(html, "target: {", "observer: {")
+    assert "whether or not it is aimed at them" in target, \
+        "target framing still assumes every action has an addressee"
+
+
+def test_target_directed_posted_on_scenario_rows(html):
+    submit = html[html.index("function submitScenario()"):]
+    assert "target_directed: anchor ? anchor.directed : null" in submit, \
+        "directedness not recorded per row"
+
+
+def test_target_directed_column_declared(sql):
+    assert "add column if not exists target_directed boolean" in sql
 
 
 # ---------------------------------------------------------------------------

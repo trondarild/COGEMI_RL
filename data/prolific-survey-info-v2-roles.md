@@ -40,6 +40,18 @@ independently at 1/3 would land on splits like 7/11/12 about as often as not.
 Same scenario pool in all three arms; only the framing of Q1/Q2 and the
 consent intro differ, and those are selected at runtime from `ROLE_TEXT`.
 
+The target arm sees one extra line under each vignette naming the position it
+is to take — "In this situation you are: one of the joggers being shouted at."
+About half the pool has no addressee: nobody is on the receiving end of someone
+applying makeup or leaving litter. Without a named position the target arm
+collapses into the observer arm on those items, and participants improvise
+different resolutions. Each scenario is tagged `directed` (17 items, the action
+is aimed at that person) or incidental (23, it merely lands on them), and the
+tag is written to `responses_v2.target_directed` on every arm. Targetedness is
+close to confounded with the action factor — kiss and money are almost all
+directed, makeup and litter none — so compare the target–observer gap within
+each level rather than pooling across items.
+
 | | |
 |---|---|
 | Items per participant | 47 — 40 park scenarios, 2 attention checks (positions 10 and 22), 5 test-retest repeats at the end |
@@ -126,9 +138,9 @@ completion and then redirects every participant to an invalid Prolific URL.
 1. Run the **Role router** section of
    `cogemi/survey/appropriateness_survey_supabase_setup.sql` in the Supabase
    SQL editor. It creates `role_assignments` and the four functions the page
-   calls. The `role` column on `responses_v2` (section above it) must also be
-   in place — without it every insert 400s and the study silently collects
-   nothing.
+   calls. The `role` and `target_directed` columns on `responses_v2` (the two
+   sections above it) must also be in place — without either, every insert
+   400s and the study silently collects nothing.
 2. Run the live integration tests, which check exactly that:
    ```
    COGEMI_LIVE_SUPABASE=1 .venv/bin/python -m pytest tests/test_integration_role_router.py -v

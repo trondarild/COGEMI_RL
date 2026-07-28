@@ -105,6 +105,17 @@ alter table responses_v2 add column if not exists role text;   -- "agent" | "tar
 
 create index if not exists responses_v2_role_idx on responses_v2 (role);
 
+-- ── Target anchors ──────────────────────────────────────────────────────────
+-- About half the scenario pool has no addressee, so the target arm names one
+-- position per scenario and records whether the action is aimed at that person
+-- (true) or merely lands on them (false). Posted on every arm: it is a property
+-- of the item, and the analysis compares the target-observer gap within each
+-- level. Null on the disagreement and completion rows. Safe to re-run.
+
+alter table responses_v2 add column if not exists target_directed boolean;
+
+create index if not exists responses_v2_target_directed_idx on responses_v2 (target_directed);
+
 -- ── Role router (appropriateness_survey_aspects_park_prolific_v2_roles.html) ─
 -- Single Prolific study, role drawn server-side at entry. Prolific prevents a
 -- participant from submitting the same study twice, so one study with a

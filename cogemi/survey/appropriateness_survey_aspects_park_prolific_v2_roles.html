@@ -66,6 +66,13 @@
       padding: 1rem 1.25rem; border-radius: 0 6px 6px 0;
       margin-bottom: 1.25rem;
     }
+    /* Target arm only — names the position the participant is to take */
+    .target-anchor {
+      font-size: 0.95rem; line-height: 1.5;
+      background: #fff8e6; border-left: 4px solid #e0a800;
+      padding: 0.7rem 1.25rem; border-radius: 0 6px 6px 0;
+      margin: -0.5rem 0 1.25rem; color: #4a3d1a;
+    }
     .phase-label {
       font-size: 0.78rem; font-weight: 700; letter-spacing: 0.06em;
       text-transform: uppercase; color: #4a90d9;
@@ -194,6 +201,7 @@
     <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
     <h2 id="scenario-counter">Situation 1 of 47</h2>
     <div class="scenario-text" id="scenario-text"></div>
+    <div class="target-anchor hidden" id="target-anchor"></div>
 
     <!-- Q1: personal appropriateness (5-point Likert) -->
     <div id="q1-phase">
@@ -279,9 +287,9 @@ var ROLE_TEXT = {
   },
   target: {
     label: "TARGET PERSPECTIVE",
-    intro: 'Thank you for taking part. This study investigates how people judge the social appropriateness of everyday actions in public settings. In this study, you will consider each situation from the perspective of <strong>the person on the receiving end of the action</strong>.',
-    q1:    'Imagining yourself as the person this action is directed at &#8212; how socially appropriate do you personally consider it?',
-    q2:    'What do you think <em>most people</em> on the receiving end would consider appropriate in this situation?'
+    intro: 'Thank you for taking part. This study investigates how people judge the social appropriateness of everyday actions in public settings. In this study, you will consider each situation from the perspective of <strong>the person on the receiving end of the action</strong> &#8212; whoever the action lands on, whether or not it is aimed at them. Each situation states who that is.',
+    q1:    'Imagining yourself as the person named under the situation &#8212; how socially appropriate do you personally consider this action?',
+    q2:    'What do you think <em>most people</em> in that position would consider appropriate in this situation?'
   },
   observer: {
     label: "OBSERVER PERSPECTIVE",
@@ -289,6 +297,79 @@ var ROLE_TEXT = {
     q1:    'Imagining yourself as an outside observer &#8212; how socially appropriate do you personally consider this action?',
     q2:    'What do you think <em>most people</em> observing this situation would consider appropriate?'
   }
+};
+
+// ---------------------------------------------------------------------------
+// Target anchors — shown only in the target arm
+//
+// About half the pool has no addressee: nobody is on the receiving end of
+// someone applying makeup or leaving litter. Without a named position the
+// target arm collapses into the observer arm, and participants improvise
+// different resolutions. Each scenario therefore names one position, and
+// `directed` records whether the action is aimed at that person (true) or
+// merely lands on them (false). Targetedness is close to confounded with the
+// action factor, so it is recorded per row and tested within, not dropped.
+// ---------------------------------------------------------------------------
+var TARGET_ANCHORS = {
+  // ── yell ──
+  yell_park_child:        { who:"one of the friends being chased",                    directed:true  },
+  yell_park_drunk:        { who:"one of the joggers being shouted at",                directed:true  },
+  yell_park_authority:    { who:"a pupil in the class being instructed",              directed:true  },
+  yell_park_distress:     { who:"someone sitting on the next bench",                  directed:false },
+  yell_park_performer:    { who:"a passer-by being called out to",                    directed:true  },
+
+  // ── kiss someone ──
+  kiss_park_child:        { who:"the other child",                                    directed:true  },
+  kiss_park_drunk:        { who:"the stranger being kissed",                          directed:true  },
+  kiss_park_authority:    { who:"the colleague being greeted",                        directed:true  },
+  kiss_park_distress:     { who:"the partner being kissed",                           directed:true  },
+  kiss_park_performer:    { who:"the other performer being kissed",                   directed:true  },
+
+  // ── talk about money ──
+  money_park_child:       { who:"the parent being asked",                             directed:true  },
+  money_park_drunk:       { who:"the stranger being told",                            directed:true  },
+  money_park_authority:   { who:"the client whose finances are being discussed",      directed:true  },
+  money_park_distress:    { who:"the person on the other end of the call",            directed:true  },
+  money_park_performer:   { who:"a passer-by who has stopped to listen",              directed:true  },
+
+  // ── drink alcohol ──
+  alcohol_park_child:     { who:"the parent whose glass it is",                       directed:false },
+  alcohol_park_drunk:     { who:"a parent at a nearby picnic blanket",                directed:false },
+  alcohol_park_authority: { who:"one of the direct reports at the picnic",            directed:false },
+  alcohol_park_distress:  { who:"someone sitting at the other end of the bench",      directed:false },
+  alcohol_park_performer: { who:"a passer-by watching the act",                       directed:true  },
+
+  // ── apply makeup ──
+  makeup_park_child:      { who:"the mother whose lipstick it is",                    directed:false },
+  makeup_park_drunk:      { who:"one of the passers-by whose attention it draws",     directed:false },
+  makeup_park_authority:  { who:"the parent arriving to speak to them",               directed:false },
+  makeup_park_distress:   { who:"someone sharing the bench",                          directed:false },
+  makeup_park_performer:  { who:"a passer-by who sees it",                            directed:false },
+
+  // ── cry ──
+  cry_park_child:         { who:"one of the nearby adults whose attention it draws",  directed:false },
+  cry_park_drunk:         { who:"a passer-by who notices",                            directed:false },
+  cry_park_authority:     { who:"a pupil on the school trip who notices",             directed:false },
+  cry_park_distress:      { who:"someone sitting on the same bench",                  directed:false },
+  cry_park_performer:     { who:"one of the onlookers watching the act",              directed:true  },
+
+  // ── play music without headphones ──
+  music_park_child:       { who:"someone on a nearby bench",                          directed:false },
+  music_park_drunk:       { who:"a parent in one of the nearby families",             directed:false },
+  music_park_authority:   { who:"someone nearby who is not in the class",             directed:false },
+  music_park_distress:    { who:"someone they walk past",                             directed:false },
+  music_park_performer:   { who:"a passer-by who has stopped to listen",              directed:true  },
+
+  // ── litter ──
+  litter_park_child:      { who:"the next person to sit on that bench",               directed:false },
+  litter_park_drunk:      { who:"the next person to use that bench",                  directed:false },
+  litter_park_authority:  { who:"the park keeper who clears the site",                directed:false },
+  litter_park_distress:   { who:"the next person to use that bench",                  directed:false },
+  litter_park_performer:  { who:"the park keeper who has to clear the pitch",         directed:false },
+
+  // ── attention checks ──
+  sa_check_appropriate:   { who:"the person the door is held open for",               directed:true  },
+  sa_check_inappropriate: { who:"someone waiting in the queue",                       directed:true  }
 };
 
 // ---------------------------------------------------------------------------
@@ -615,6 +696,22 @@ function startSurvey() {
 }
 
 // ---------------------------------------------------------------------------
+// Target anchor — visible in the target arm only, so the agent and observer
+// arms see exactly the vignette text they always saw.
+// ---------------------------------------------------------------------------
+function anchorFor(scenarioId) {
+  return TARGET_ANCHORS[scenarioId] || null;
+}
+
+function renderTargetAnchor(s) {
+  var box = document.getElementById("target-anchor");
+  var a   = anchorFor(s.id);
+  if (ROLE !== "target" || !a) { box.classList.add("hidden"); return; }
+  box.textContent = "In this situation you are: " + a.who + ".";
+  box.classList.remove("hidden");
+}
+
+// ---------------------------------------------------------------------------
 // Render a fresh scenario (always starts at Q1)
 // ---------------------------------------------------------------------------
 function renderScenario() {
@@ -624,6 +721,7 @@ function renderScenario() {
   document.getElementById("scenario-counter").textContent =
     "Situation " + (state.current + 1) + " of " + total;
   document.getElementById("scenario-text").textContent = s.text;
+  renderTargetAnchor(s);
   document.getElementById("progress-fill").style.width =
     Math.round((state.current / total) * 100) + "%";
 
@@ -803,6 +901,7 @@ function submitScenario() {
   btnNext.innerHTML = '<span class="spinner"></span>Saving…';
 
   var aspectRanking = state.rankedAspects.join("|");
+  var anchor = anchorFor(s.id);
   var base = {
     prolific_id: PROLIFIC_PID,
     study_id:    STUDY_ID,
@@ -811,7 +910,10 @@ function submitScenario() {
     language:    "en",
     aspect_ranking: aspectRanking,
     is_repeat:   s.is_repeat,
-    role:        ROLE
+    role:        ROLE,
+    // Item property, recorded on every arm so the analysis can compare the
+    // target-observer gap separately for directed and incidental actions.
+    target_directed: anchor ? anchor.directed : null
   };
 
   var rows = [
